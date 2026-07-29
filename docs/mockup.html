@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bloqueos del ciclo · Linear</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FFFFFF; --ink:#14161A; --line:#E8E9EC; --line-2:#D6D9DE; --mute:#767C86; --wash:#F7F8F9;
+  --stop:#E5484D; --flow:#2563EB; --review:#7C3AED; --wait:#E8930C; --done:#B4B9C2; --sleep:#DDE0E5;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);
+  font-family:'Instrument Sans',system-ui,-apple-system,sans-serif;
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;display:flex;flex-direction:column;overflow:hidden}
+.label{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--mute)}
+
+header{display:flex;align-items:baseline;gap:28px;flex-wrap:wrap;padding:20px 26px 16px;
+  border-bottom:1px solid var(--line)}
+.h-title{font-size:21px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.h-sub{font-size:12px;color:var(--mute);margin-top:3px}
+.live{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--flow);
+  margin-right:6px;vertical-align:middle}
+.stats{display:flex;gap:30px;margin-left:auto;flex-wrap:wrap}
+.stat b{display:block;font-size:20px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.stat span{font-size:10.5px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+
+.bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 26px;border-bottom:1px solid var(--line)}
+.tog{font-size:12px;font-weight:500;padding:5px 11px;border-radius:5px;cursor:pointer;font-family:inherit;
+  background:var(--paper);color:var(--mute);border:1px solid var(--line);transition:all .12s}
+.tog:hover{color:var(--ink);border-color:var(--line-2)}
+.tog.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.tog:focus-visible{outline:2px solid var(--flow);outline-offset:2px}
+.tog.primary{color:var(--flow);border-color:#C3D3F8}
+.tog.primary:hover{background:#F2F6FE}
+.hint{margin-left:auto;font-size:11px;color:var(--mute)}
+
+.body{flex:1;display:flex;min-height:0}
+#canvas{flex:1;position:relative;overflow:hidden;cursor:grab;min-width:0}
+#canvas:active{cursor:grabbing}
+#canvas svg{display:block;width:100%;height:100%}
+.platform-label{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;fill:var(--mute)}
+.n-id{font-size:10.5px;font-weight:600}
+.n-title{font-size:12.5px;font-weight:500}
+.n-meta{font-size:10px}
+[data-id]{cursor:pointer}
+
+.tray{border-top:1px solid var(--line);background:var(--wash);padding:12px 26px 14px;
+  max-height:130px;overflow-y:auto}
+.tray-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chip{display:flex;align-items:center;gap:7px;padding:4px 10px;border-radius:5px;
+  border:1px solid var(--line);background:var(--paper);cursor:pointer;font-size:12px}
+.chip:hover{border-color:var(--line-2)}
+.dot{width:6px;height:6px;border-radius:50%;flex:none;display:inline-block}
+
+#panel{width:356px;flex:none;border-left:1px solid var(--line);overflow-y:auto;padding:20px 22px 36px}
+.sec{margin-bottom:26px}
+.sec>.label{display:block;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+.row{display:flex;align-items:center;gap:10px;padding:7px 8px;margin:0 -8px;border-radius:5px;
+  cursor:pointer;transition:background .12s}
+.row:hover{background:var(--wash)}
+.row .grow{flex:1;min-width:0}
+.row .t{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .s{font-size:11px;color:var(--mute)}
+.num{font-size:15px;font-weight:600;min-width:19px}
+.muted{color:var(--mute);font-size:12px}
+
+.dec{border:1px solid var(--line);border-radius:6px;padding:11px 13px;margin-bottom:9px}
+.dec.alta{border-color:#F5C2C4;background:#FEF7F7}
+.dec.media{border-color:#F6DCB0;background:#FEFAF3}
+.dec-sev{display:inline-block;font-size:9.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+  padding:2px 6px;border-radius:3px;margin-bottom:6px}
+.dec.alta .dec-sev{background:var(--stop);color:#fff}
+.dec.media .dec-sev{background:var(--wait);color:#fff}
+.dec.baja .dec-sev{background:var(--line-2);color:var(--ink)}
+.dec h4{font-size:12.5px;font-weight:600;margin:0 0 4px;line-height:1.35}
+.dec p{margin:0;font-size:12px;color:#4A4F58;line-height:1.5}
+.dec .refs{margin-top:8px;display:flex;gap:5px;flex-wrap:wrap}
+.dec .refs b{font-size:10.5px;font-weight:600;padding:2px 6px;border:1px solid var(--line-2);
+  border-radius:3px;cursor:pointer;background:var(--paper)}
+.dec .refs b:hover{border-color:var(--ink)}
+
+.chain{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:11.5px}
+.chain b{cursor:pointer;padding:3px 7px;border:1px solid var(--line);border-radius:4px;font-weight:600}
+.chain b:hover{border-color:var(--ink)}
+.chain i{color:var(--line-2);font-style:normal}
+
+.d-id{font-size:11.5px;font-weight:600;color:var(--mute)}
+.d-title{font-size:15px;font-weight:600;line-height:1.35;margin:4px 0 14px;letter-spacing:-.01em}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.kv span:first-child{color:var(--mute)}
+.kv b{font-weight:500}
+.pill{font-size:11px;font-weight:600}
+.back{background:none;border:none;color:var(--mute);cursor:pointer;padding:0;margin-bottom:14px;
+  font-size:12px;font-weight:500;font-family:inherit}
+.back:hover{color:var(--ink)}
+a.link{color:var(--flow);font-size:12.5px;text-decoration:none;font-weight:500}
+a.link:hover{text-decoration:underline}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--mute)}
+.legend div{display:flex;align-items:center;gap:6px}
+
+#veil{position:fixed;inset:0;background:rgba(20,22,26,.34);display:none;align-items:center;
+  justify-content:center;z-index:50;padding:20px}
+#veil.open{display:flex}
+.modal{width:min(520px,100%);background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:24px}
+.modal h3{font-size:16px;font-weight:600;margin:0 0 5px;letter-spacing:-.01em}
+.modal p{color:var(--mute);font-size:12.5px;line-height:1.55;margin:0 0 18px}
+.field{margin-bottom:13px}
+.field label{display:block;margin-bottom:6px}
+.field input{width:100%;padding:9px 11px;background:var(--paper);border:1px solid var(--line-2);
+  border-radius:5px;color:var(--ink);font-size:12.5px;font-family:inherit}
+.field input:focus{outline:none;border-color:var(--flow)}
+.check{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute);margin-bottom:18px}
+.actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+#status{font-size:12px;margin-top:14px;line-height:1.5}
+.note{border-left:2px solid var(--line);padding-left:12px;margin-top:18px;color:var(--mute);
+  font-size:11.5px;line-height:1.55}
+
+@media (max-width:900px){
+  .body{flex-direction:column}
+  #panel{width:100%;border-left:none;border-top:1px solid var(--line);max-height:46%}
+  #canvas{min-height:280px}
+  .hint{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="h-title" id="h-cycle">Cycle</div>
+    <div class="h-sub" id="h-dates"></div>
+  </div>
+  <div class="stats" id="stats"></div>
+</header>
+
+<div class="bar">
+  <button class="tog on" data-toggle="showOutside">Fuera del ciclo</button>
+  <button class="tog" data-toggle="showParents">Padre / hijo</button>
+  <button class="tog" data-toggle="showOrphans">Sin dependencias</button>
+  <button class="tog" id="btn-reset">Reencuadrar</button>
+  <button class="tog primary" id="btn-connect">Actualizar desde Linear</button>
+  <div class="hint">clic para aislar una cadena · arrastrar para mover · ⌘/ctrl + scroll para zoom</div>
+</div>
+
+<div class="body">
+  <div id="canvas"><svg><defs id="defs"></defs><g id="stage"></g></svg></div>
+  <aside id="panel"></aside>
+</div>
+
+<div class="tray" id="tray" hidden></div>
+
+<div id="veil">
+  <div class="modal">
+    <h3>Traer datos de Linear</h3>
+    <p>El navegador consulta la API GraphQL de Linear directamente. La clave no viaja a ningún otro lado, pero tampoco queda oculta: usá este modo en tu máquina, no en una página publicada.</p>
+    <div class="field">
+      <label class="label" for="key">Personal API key · Settings › Account › Security &amp; Access</label>
+      <input type="password" id="key" placeholder="lin_api_..." autocomplete="off" spellcheck="false">
+    </div>
+    <div class="field">
+      <label class="label" for="team">Clave del equipo</label>
+      <input type="text" id="team" value="MOVO" spellcheck="false">
+    </div>
+    <label class="check"><input type="checkbox" id="remember"> Recordar la clave en este navegador</label>
+    <div class="actions">
+      <button class="tog primary" id="btn-fetch">Traer ciclo activo</button>
+      <button class="tog" id="btn-file">Cargar archivo JSON</button>
+      <button class="tog" id="btn-close">Cerrar</button>
+      <input type="file" id="file" accept=".json" hidden>
+    </div>
+    <div id="status"></div>
+    <div class="note">Traer los datos actualiza el grafo pero no las decisiones: ese bloque lo escribe el análisis. Si el navegador bloquea la consulta por CORS, usá <b>linear-snapshot.mjs</b> y cargá acá el JSON que genera.</div>
+  </div>
+</div>
+
+<script>
+/* ══ DATOS · los reescribe linear-snapshot.mjs o el análisis ══ */
+const SNAPSHOT = /*DATA_START*/{
+"cycle":{"team":"Movo Team","name":"Cycle 3","start":"27 jul","end":"10 ago","taken":"29 jul 2026","live":false,"workspace":"movosend"},
+"analysis":{"generated":"29 jul 2026","decisions":[
+{"sev":"alta","title":"MOVO-66 no puede cerrarse en este ciclo","issues":["MOVO-66","MOVO-85","MOVO-87","MOVO-88","MOVO-89"],
+ "body":"Vale 8 puntos, está In Progress y bloquea a 70, 7 y 63. Pero 4 de sus 6 sub-issues quedaron en backlog. O entran al ciclo ahora, o se recorta el alcance del padre a lo que 84 y 86 ya cubren y el resto pasa al próximo."},
+{"sev":"alta","title":"MOVO-63 ocupa lugar sin trabajo ejecutable detrás","issues":["MOVO-63","MOVO-74","MOVO-75","MOVO-76"],
+ "body":"Sus tres sub-issues están en backlog y sin asignar. Como US padre no se cierra sola. Sacala del ciclo, o bajá MOVO-74 al ciclo y asignala."},
+{"sev":"alta","title":"El track de identidad es una fila india de cuatro pasos","issues":["MOVO-66","MOVO-70","MOVO-71","MOVO-72"],
+ "body":"58 → 66 → 70 → 71/72 no se puede paralelizar: cada uno espera al anterior. Con 66 recién arrancado y 13 puntos aguas abajo, ese tramo no llega al 10 de agosto. Decidí ahora qué se corta, en vez de descubrirlo el día 9."},
+{"sev":"media","title":"El spike MOVO-48 debería correrse esta semana","issues":["MOVO-48","MOVO-72"],
+ "body":"Son 2 puntos, nadie lo empezó y bloquea a MOVO-72 (5 puntos). Además depende de credenciales de sandbox de un tercero, con un lead time que el equipo no controla."},
+{"sev":"media","title":"Alena está en el camino crítico y con cuatro frentes abiertos","issues":["MOVO-70","MOVO-71","MOVO-60","MOVO-61","MOVO-40"],
+ "body":"70 y 71 son secuenciales sobre el mismo archivo de rutas (8 puntos) y además tiene 60, 61 y 40 en curso. Es el único recurso sobre el camino crítico: conviene descargarle los diagramas."},
+{"sev":"baja","title":"Siete issues del ciclo no declaran ninguna dependencia","issues":[],
+ "body":"Póster, paper, diagramas y CI/CD figuran sueltas. Es poco probable que sea cierto: significa que nadie escribió la relación en Linear. El grafo solo ve lo que está declarado."}]},
+"nodes":[
+{"id":"MOVO-58","short":"DER en Markdown","title":"Armar .MD del DER","status":"Done","type":"completed","pts":1,"who":"Lucas D.","parent":null,"inCycle":true},
+{"id":"MOVO-67","short":"movo-shared: JWT y errores","title":"Librería compartida de JWT, tipos de dominio y contrato de errores en movo-shared","status":"Done","type":"completed","pts":3,"who":"Tomás V.","parent":null,"inCycle":true},
+{"id":"MOVO-48","short":"Spike Didit.me","title":"Didit.me · spike de validación del flujo de KYC en sandbox","status":"Todo","type":"unstarted","pts":2,"who":"Juan Cruz B.","parent":null,"inCycle":true},
+{"id":"MOVO-66","short":"Persistencia svc-users","title":"Schema, migraciones y capa de persistencia de movo-svc-users","status":"In Progress","type":"started","pts":8,"who":"Pedro Y.","parent":null,"inCycle":true},
+{"id":"MOVO-84","short":"Schema + migraciones PG","title":"Schema y migraciones de PostgreSQL para movo-svc-users (users, user_roles)","status":"Done","type":"completed","pts":3,"who":"Pedro Y.","parent":"MOVO-66","inCycle":true},
+{"id":"MOVO-86","short":"Plugin Redis","title":"Plugin de conexión Redis en movo-svc-users (fastify.redis)","status":"In Progress","type":"started","pts":2,"who":"Pedro Y.","parent":"MOVO-66","inCycle":true},
+{"id":"MOVO-68","short":"Middleware auth en gateway","title":"Middleware de autenticación, autorización por rol y rate limiting en movo-api-gateway","status":"In Review","type":"started","pts":5,"who":"Juan Cruz B.","parent":null,"inCycle":true},
+{"id":"MOVO-70","short":"Endpoint de registro","title":"[svc-users] Endpoint de registro de usuario: validaciones, hash de contraseña y persistencia","status":"Todo","type":"unstarted","pts":3,"who":"Alena A.","parent":"MOVO-7","inCycle":true},
+{"id":"MOVO-7","short":"Registro · US padre","title":"Como usuario nuevo, quiero completar el proceso de registro para poder operar en la plataforma","status":"Todo","type":"unstarted","pts":null,"who":null,"parent":null,"inCycle":true},
+{"id":"MOVO-71","short":"OTP de teléfono","title":"[svc-users] Verificación de teléfono por OTP con almacenamiento en Redis y adapter de SMS","status":"Todo","type":"unstarted","pts":5,"who":"Alena A.","parent":"MOVO-7","inCycle":true},
+{"id":"MOVO-72","short":"Integración Didit.me","title":"[svc-users] Integración con Didit.me: creación de sesión KYC, webhook de resultado y máquina de estados","status":"Todo","type":"unstarted","pts":5,"who":"Juan Cruz B.","parent":"MOVO-7","inCycle":true},
+{"id":"MOVO-63","short":"Login · US padre","title":"Como usuario registrado, quiero iniciar sesión en la aplicación con mis credenciales","status":"Todo","type":"unstarted","pts":null,"who":"Tomás V.","parent":null,"inCycle":true},
+{"id":"MOVO-59","short":"CI/CD admin + mobile","title":"Configurar pipeline de CI/CD para movo-admin y movo-mobile","status":"Done","type":"completed","pts":3,"who":"Tomás V.","parent":null,"inCycle":true},
+{"id":"MOVO-69","short":"Testing + quality gates","title":"Setup de testing automatizado y quality gates en CI","status":"Done","type":"completed","pts":3,"who":"Tomás V.","parent":null,"inCycle":true},
+{"id":"MOVO-53","short":"Verificación de repos","title":"Completar verificación de status de repositorios y flujos de CI/CD","status":"Done","type":"completed","pts":2,"who":"Tomás V.","parent":null,"inCycle":true},
+{"id":"MOVO-60","short":"Diagrama de estado User","title":"Diagrama de Estado User","status":"In Progress","type":"started","pts":2,"who":"Alena A.","parent":null,"inCycle":true},
+{"id":"MOVO-61","short":"Diagrama de estado Shipment","title":"Diagrama de estado Shipment","status":"In Progress","type":"started","pts":2,"who":"Alena A.","parent":null,"inCycle":true},
+{"id":"MOVO-40","short":"Paper","title":"Diseño y Entrega de Paper","status":"In Review","type":"started","pts":3,"who":"Alena A.","parent":null,"inCycle":true},
+{"id":"MOVO-45","short":"Póster","title":"Diseño y Entrega del Póster","status":"In Review","type":"started","pts":2,"who":"Tomás V.","parent":null,"inCycle":true},
+{"id":"MOVO-85","short":"Plugin PostgreSQL","title":"Plugin de conexión PostgreSQL en movo-svc-users (fastify.db)","status":"Backlog","type":"backlog","pts":null,"who":"Lucas D.","parent":"MOVO-66","inCycle":false},
+{"id":"MOVO-87","short":"user-repository","title":"user-repository: capa de acceso a datos de usuarios (PostgreSQL)","status":"Backlog","type":"backlog","pts":null,"who":"Lucas D.","parent":"MOVO-66","inCycle":false},
+{"id":"MOVO-88","short":"session-repository","title":"session-repository: refresh tokens en Redis (soporte para ADR-004)","status":"Backlog","type":"backlog","pts":2,"who":"Pedro Y.","parent":"MOVO-66","inCycle":false},
+{"id":"MOVO-89","short":"GET /health","title":"GET /health en movo-svc-users: estado de PostgreSQL y Redis","status":"Backlog","type":"backlog","pts":null,"who":"Lucas D.","parent":"MOVO-66","inCycle":false},
+{"id":"MOVO-73","short":"Mobile: registro + KYC","title":"[movo-mobile] Pantallas de registro, verificación de OTP y flujo de KYC embebido","status":"Ready for Dev","type":"backlog","pts":null,"who":null,"parent":"MOVO-7","inCycle":false},
+{"id":"MOVO-74","short":"Endpoint de login","title":"[svc-users] Endpoint de login: validación de credenciales y emisión de access + refresh token","status":"Backlog","type":"backlog","pts":null,"who":null,"parent":"MOVO-63","inCycle":false},
+{"id":"MOVO-75","short":"Refresh + logout","title":"[svc-users] Endpoints de refresh token con rotación y de logout con revocación en Redis","status":"Backlog","type":"backlog","pts":null,"who":null,"parent":"MOVO-63","inCycle":false},
+{"id":"MOVO-76","short":"Mobile: login","title":"[movo-mobile] Pantalla de login, secure storage de tokens, refresh automático y guard de navegación","status":"Backlog","type":"backlog","pts":null,"who":null,"parent":"MOVO-63","inCycle":false}],
+"blocks":[["MOVO-58","MOVO-84"],["MOVO-58","MOVO-66"],["MOVO-67","MOVO-68"],["MOVO-67","MOVO-70"],
+["MOVO-67","MOVO-63"],["MOVO-67","MOVO-7"],["MOVO-66","MOVO-70"],["MOVO-66","MOVO-63"],["MOVO-66","MOVO-7"],
+["MOVO-68","MOVO-63"],["MOVO-68","MOVO-7"],["MOVO-70","MOVO-71"],["MOVO-70","MOVO-72"],["MOVO-70","MOVO-63"],
+["MOVO-48","MOVO-72"],["MOVO-84","MOVO-85"],["MOVO-84","MOVO-87"],["MOVO-86","MOVO-88"],["MOVO-86","MOVO-89"]]
+}/*DATA_END*/;
+
+const NW=206, NH=64, COL=282, ROW=86, PAD=46;
+const STATE_COLOR={"Done":"var(--done)","Completed":"var(--done)","In Progress":"var(--flow)",
+  "In Review":"var(--review)","Todo":"var(--wait)","Backlog":"var(--sleep)","Ready for Dev":"var(--sleep)"};
+const colorOf=n=>STATE_COLOR[n.status]||({completed:"var(--done)",started:"var(--flow)",
+  unstarted:"var(--wait)",backlog:"var(--sleep)",canceled:"var(--sleep)"}[n.type]||"var(--sleep)");
+const textColor=n=>{const c=colorOf(n);return c==="var(--done)"||c==="var(--sleep)"?"var(--mute)":c};
+
+let DATA=SNAPSHOT, BY={}, L=null;
+const S={sel:null,hover:null,showOutside:true,showParents:false,showOrphans:false,view:{k:1,x:0,y:0}};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const url=id=>`https://linear.app/${DATA.cycle.workspace||"linear"}/issue/${id}`;
+function reindex(){ BY=Object.fromEntries(DATA.nodes.map(n=>[n.id,n])); }
+
+function layout(){
+  const vis=new Set(DATA.nodes.filter(n=>n.inCycle||S.showOutside).map(n=>n.id));
+  const edges=DATA.blocks.filter(([a,b])=>vis.has(a)&&vis.has(b));
+  const preds={},succs={};
+  vis.forEach(id=>{preds[id]=[];succs[id]=[]});
+  edges.forEach(([a,b])=>{succs[a].push(b);preds[b].push(a)});
+  const conn=[...vis].filter(id=>preds[id].length||succs[id].length);
+  const orphans=[...vis].filter(id=>!preds[id].length&&!succs[id].length&&BY[id].inCycle);
+  const lvl={};
+  const resolve=(id,seen=new Set())=>{
+    if(lvl[id]!==undefined) return lvl[id];
+    if(seen.has(id)) return 0;
+    seen.add(id);
+    return lvl[id]=preds[id].length?Math.max(...preds[id].map(p=>resolve(p,seen)))+1:0;
+  };
+  conn.forEach(id=>resolve(id));
+  const maxL=conn.length?Math.max(...conn.map(id=>lvl[id])):0;
+  let cols=Array.from({length:maxL+1},(_,l)=>conn.filter(id=>lvl[id]===l));
+  const ord={}; cols.forEach(c=>c.forEach((id,i)=>ord[id]=i));
+  for(let p=0;p<4;p++){
+    const fwd=p%2===0, seq=cols.map((_,i)=>i); if(!fwd) seq.reverse();
+    seq.forEach(l=>{
+      const rel=fwd?preds:succs;
+      cols[l]=[...cols[l]].sort((a,b)=>{
+        const bc=id=>{const r=(rel[id]||[]).filter(x=>lvl[x]!==undefined);
+          return r.length?r.reduce((s,x)=>s+ord[x],0)/r.length:ord[id]};
+        return bc(a)-bc(b);
+      });
+      cols[l].forEach((id,i)=>ord[id]=i);
+    });
+  }
+  const tall=Math.max(1,...cols.map(c=>c.length));
+  const pos={};
+  cols.forEach((c,l)=>{const off=(tall-c.length)/2;
+    c.forEach((id,i)=>pos[id]={x:PAD+l*COL,y:PAD+(i+off)*ROW})});
+  return {pos,edges,preds,succs,orphans,cols,height:PAD*2+tall*ROW-(ROW-NH)};
+}
+function walk(start,map){
+  const out=new Set(), q=[...(map[start]||[])];
+  while(q.length){const n=q.pop(); if(out.has(n))continue; out.add(n); (map[n]||[]).forEach(x=>q.push(x));}
+  return out;
+}
+function elbow(a,b){
+  const sx=a.x+NW, sy=a.y+NH/2, tx=b.x, ty=b.y+NH/2;
+  if(Math.abs(sy-ty)<1) return `M${sx},${sy} L${tx},${ty}`;
+  const mx=sx+Math.max(26,(tx-sx)/2), r=Math.min(12,Math.abs(ty-sy)/2), s=ty>sy?1:-1;
+  return `M${sx},${sy} L${mx-r},${sy} Q${mx},${sy} ${mx},${sy+s*r} L${mx},${ty-s*r} Q${mx},${ty} ${mx+r},${ty} L${tx},${ty}`;
+}
+function metrics(){
+  const cyc=DATA.nodes.filter(n=>n.inCycle);
+  const done=cyc.filter(n=>n.type==="completed");
+  const sum=a=>a.reduce((s,n)=>s+(n.pts||0),0);
+  const P={},Sc={};
+  DATA.nodes.forEach(n=>{P[n.id]=[];Sc[n.id]=[]});
+  DATA.blocks.forEach(([a,b])=>{if(Sc[a]&&P[b]){Sc[a].push(b);P[b].push(a)}});
+  const open=DATA.blocks.filter(([a])=>BY[a]&&BY[a].type!=="completed");
+  const bottlenecks=DATA.nodes.filter(n=>n.type!=="completed"&&Sc[n.id].length)
+    .map(n=>{const d=walk(n.id,Sc);
+      return {n,total:d.size,pts:[...d].reduce((s,i)=>s+((BY[i]||{}).pts||0),0)}})
+    .sort((a,b)=>b.total-a.total||b.pts-a.pts);
+  const memo={};
+  const longest=id=>memo[id]||(memo[id]=[id,...(Sc[id].map(longest).sort((a,b)=>b.length-a.length)[0]||[])]);
+  const chain=DATA.nodes.filter(n=>!P[n.id].length).map(n=>longest(n.id))
+    .sort((a,b)=>b.length-a.length)[0]||[];
+  const stranded=DATA.nodes.filter(n=>n.inCycle).map(n=>{
+    const kids=DATA.nodes.filter(k=>k.parent===n.id);
+    return {n,kids:kids.length,out:kids.filter(k=>!k.inCycle)};
+  }).filter(x=>x.out.length);
+  return {total:cyc.length,done:done.length,pts:sum(cyc),donePts:sum(done),open,bottlenecks,chain,stranded};
+}
+
+function render(){
+  reindex(); L=layout();
+  const M=metrics(), c=DATA.cycle;
+  document.getElementById("h-cycle").textContent=`${c.team} · ${c.name}`;
+  document.getElementById("h-dates").innerHTML=
+    `${esc(c.start)} → ${esc(c.end)} · ${c.live?'<span class="live"></span>en vivo ':"datos al "}${esc(c.taken)}`;
+  document.getElementById("stats").innerHTML=`
+    <div class="stat"><b>${M.done}/${M.total}</b><span>cerradas</span></div>
+    <div class="stat"><b>${M.donePts}/${M.pts}</b><span>puntos</span></div>
+    <div class="stat"><b style="color:var(--stop)">${M.open.length}</b><span>bloqueos abiertos</span></div>
+    <div class="stat"><b>${M.chain.length}</b><span>cadena más larga</span></div>`;
+
+  const active=S.sel||S.hover;
+  const lit=active?new Set([active,...walk(active,L.preds),...walk(active,L.succs)]):null;
+
+  document.getElementById("defs").innerHTML=["dim","on","off","stop"].map(k=>
+    `<marker id="ah-${k}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="${k==="on"?"var(--ink)":k==="off"?"var(--line)":k==="stop"?"var(--stop)":"var(--line-2)"}"/></marker>`).join("");
+
+  let svg="";
+  L.cols.forEach((col,l)=>{
+    const x=PAD+l*COL-18;
+    svg+=`<line x1="${x}" y1="${PAD-22}" x2="${x}" y2="${L.height-14}" stroke="var(--line)"/>
+      <text class="platform-label" x="${x+8}" y="${PAD-30}">${l===0?"Sin bloqueos":"Nivel "+l}</text>`;
+  });
+
+  if(S.showParents){
+    DATA.nodes.forEach(n=>{
+      if(!n.parent||!L.pos[n.id]||!L.pos[n.parent])return;
+      const a=L.pos[n.parent],b=L.pos[n.id];
+      const ax=a.x+NW/2,ay=a.y+NH/2,bx=b.x+NW/2,by=b.y+NH/2;
+      const bow=Math.max(40,Math.abs(by-ay)*.5);
+      svg+=`<path d="M${ax},${ay} C${ax-bow},${ay} ${bx-bow},${by} ${bx},${by}" fill="none"
+        stroke="var(--review)" stroke-width="1" stroke-dasharray="2 4" opacity="${lit ? 0.12 : 0.4}"/>`;
+    });
+  }
+
+  L.edges.forEach(([a,b])=>{
+    const on=lit&&lit.has(a)&&lit.has(b), off=lit&&!on;
+    const openEdge=BY[a].type!=="completed";
+    const stroke=on?"var(--ink)":off?"var(--line)":openEdge?"var(--stop)":"var(--line-2)";
+    svg+=`<path d="${elbow(L.pos[a],L.pos[b])}" fill="none" stroke="${stroke}"
+      stroke-width="${on?1.8:(openEdge&&!off?1.3:1)}"
+      marker-end="url(#ah-${on?"on":off?"off":openEdge?"stop":"dim"})"
+      opacity="${off?.6:1}"/>`;
+  });
+
+  Object.entries(L.pos).forEach(([id,p])=>{
+    const n=BY[id], on=!lit||lit.has(id), sel=S.sel===id;
+    const blocked=L.preds[id].some(x=>BY[x].type!=="completed");
+    const nOut=L.succs[id].length, openBlocker=nOut&&n.type!=="completed";
+    svg+=`<g data-id="${id}" transform="translate(${p.x},${p.y})" opacity="${on?1:.16}">
+      <rect width="${NW}" height="${NH}" rx="6" fill="var(--paper)"
+        stroke="${sel?"var(--ink)":blocked?"#F0C6C8":"var(--line)"}" stroke-width="${sel?1.6:1}"
+        ${n.inCycle?"":'stroke-dasharray="3 3"'}/>
+      <rect x="1.5" y="1.5" width="3.5" height="${NH-3}" rx="1.75" fill="${colorOf(n)}"/>
+      <text class="n-id" x="16" y="20" fill="var(--mute)">${esc(n.id)}</text>
+      <text class="n-meta" x="${NW-13}" y="20" text-anchor="end" fill="var(--mute)">${n.pts?n.pts+" pt":n.inCycle?"—":"fuera"}</text>
+      <text class="n-title" x="16" y="38" fill="var(--ink)">${esc(n.short.length>27?n.short.slice(0,26)+"…":n.short)}</text>
+      <text class="n-meta" x="16" y="53" fill="var(--mute)">${esc(n.who||"sin asignar")}</text>
+      ${nOut?`<rect x="${NW-42}" y="42" width="29" height="15" rx="4" fill="${openBlocker?"#FDEDED":"var(--wash)"}"/>
+        <text class="n-meta" x="${NW-27.5}" y="53" text-anchor="middle" font-weight="600"
+          fill="${openBlocker?"var(--stop)":"var(--mute)"}">${nOut} ↓</text>`:""}
+    </g>`;
+  });
+
+  const stage=document.getElementById("stage");
+  stage.innerHTML=svg;
+  stage.setAttribute("transform",`translate(${S.view.x},${S.view.y}) scale(${S.view.k})`);
+  renderPanel(M); renderTray();
+}
+
+function renderPanel(M){
+  const el=document.getElementById("panel");
+  if(S.sel){
+    const d=BY[S.sel], down=walk(S.sel,L.succs), preds=L.preds[S.sel]||[];
+    el.innerHTML=`
+      <button class="back" id="btn-back">← Volver al resumen</button>
+      <div class="d-id">${esc(d.id)}</div>
+      <div class="d-title">${esc(d.title)}</div>
+      <div class="kv"><span>Estado</span><b class="pill" style="color:${textColor(d)}">${esc(d.status)}</b></div>
+      <div class="kv"><span>Responsable</span><b>${esc(d.who||"sin asignar")}</b></div>
+      <div class="kv"><span>Puntos</span><b>${d.pts??"sin estimar"}</b></div>
+      <div class="kv"><span>En el ciclo</span><b>${d.inCycle?"sí":"no · backlog"}</b></div>
+      <div class="kv" style="border-bottom:none;margin-bottom:18px"><span>Linear</span>
+        <a class="link" href="${url(d.id)}" target="_blank" rel="noreferrer">abrir ↗</a></div>
+      <div class="sec"><div class="label">Bloqueado por · ${preds.length}</div>
+        ${preds.length?preds.map(id=>rowHTML(id,BY[id].status,
+            BY[id].type!=="completed"?'<span class="dot" style="background:var(--stop)"></span>':"")).join("")
+          :'<div class="muted">Nada lo frena. Se puede tomar hoy.</div>'}</div>
+      <div class="sec" style="margin-bottom:0"><div class="label">Desbloquea · ${down.size} aguas abajo</div>
+        ${down.size?[...down].map(id=>rowHTML(id,(BY[id].pts?BY[id].pts+" pt":"sin estimar"),
+          L.succs[S.sel].includes(id)?'<span class="s">directo</span>':"")).join("")
+          :'<div class="muted">No hay nada esperando esta issue.</div>'}</div>`;
+    return;
+  }
+  const A=DATA.analysis;
+  el.innerHTML=`
+    ${A&&A.decisions&&A.decisions.length?`
+    <div class="sec"><div class="label">Decisiones a tomar · ${esc(A.generated||"")}</div>
+      ${A.decisions.map(d=>`<div class="dec ${esc(d.sev||"baja")}">
+        <span class="dec-sev">${esc(d.sev||"baja")}</span>
+        <h4>${esc(d.title)}</h4><p>${esc(d.body)}</p>
+        ${d.issues&&d.issues.length?`<div class="refs">${d.issues.map(i=>`<b data-goto="${esc(i)}">${esc(i)}</b>`).join("")}</div>`:""}
+      </div>`).join("")}</div>`:""}
+
+    <div class="sec"><div class="label">Sub-issues fuera del ciclo</div>
+      ${M.stranded.length?M.stranded.map(x=>`<div class="row" data-goto="${x.n.id}">
+        <span class="num" style="color:var(--stop)">${x.out.length}</span>
+        <div class="grow"><div class="t">${esc(x.n.short)}</div>
+          <div class="s">${esc(x.n.id)} · de ${x.kids} hijos, ${x.out.length} en backlog</div></div></div>`).join("")
+        :'<div class="muted">Ninguna issue del ciclo tiene sub-issues afuera.</div>'}</div>
+
+    <div class="sec"><div class="label">Cuellos de botella</div>
+      ${M.bottlenecks.length?M.bottlenecks.slice(0,5).map(b=>`
+        <div class="row" data-goto="${b.n.id}"><span class="num">${b.total}</span>
+          <div class="grow"><div class="t">${esc(b.n.short)}</div>
+            <div class="s">${esc(b.n.id)} · ${esc(b.n.status)} · ${esc(b.n.who||"sin asignar")} · frena ${b.pts} pt</div></div>
+        </div>`).join(""):'<div class="muted">No hay bloqueantes abiertos.</div>'}</div>
+
+    <div class="sec"><div class="label">Cadena más larga</div>
+      <div class="chain">${M.chain.map((id,i)=>
+        `${i?'<i>→</i>':""}<b data-goto="${id}" style="color:${textColor(BY[id])}">${esc(id)}</b>`).join("")}</div>
+      <div class="muted" style="margin-top:9px">${M.chain.length} pasos en serie. Ningún atajo de paralelización los acorta.</div></div>
+
+    <div class="sec"><div class="label">Bloqueos abiertos · ${M.open.length}</div>
+      ${M.open.map(([a,b])=>`<div class="row" data-goto="${a}">
+        <span class="dot" style="background:${colorOf(BY[a])}"></span>
+        <div class="grow"><div class="t">${esc(BY[a].short)} <span style="color:var(--mute)">frena</span> ${esc((BY[b]||{}).short||b)}</div>
+          <div class="s">${esc(a)} → ${esc(b)}</div></div></div>`).join("")}</div>
+
+    <div class="sec" style="margin-bottom:0"><div class="label">Referencia</div>
+      <div class="legend">${["In Progress","In Review","Todo","Done","Backlog"].map(k=>
+        `<div><span class="dot" style="background:${STATE_COLOR[k]}"></span>${k}</div>`).join("")}</div>
+      <div class="legend" style="margin-top:10px">
+        <div><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--stop)" stroke-width="1.3"/></svg> bloqueo abierto</div>
+        <div><span style="border:1px dashed var(--line-2);width:15px;height:10px;display:inline-block;border-radius:2px"></span> fuera del ciclo</div>
+      </div></div>`;
+}
+function rowHTML(id,sub,extra){
+  const n=BY[id]||{short:id,status:"?",type:"backlog"};
+  return `<div class="row" data-goto="${id}"><span class="dot" style="background:${colorOf(n)}"></span>
+    <div class="grow"><div class="t">${esc(n.short)}</div><div class="s">${esc(id)} · ${esc(sub)}</div></div>${extra}</div>`;
+}
+function renderTray(){
+  const t=document.getElementById("tray");
+  t.hidden=!S.showOrphans;
+  if(!S.showOrphans) return;
+  t.innerHTML=`<div class="label">Sin dependencias declaradas · ${L.orphans.length} issues</div>
+    <div class="tray-row">${L.orphans.map(id=>{const n=BY[id];
+      return `<div class="chip" data-goto="${id}"><span class="dot" style="background:${colorOf(n)}"></span>
+        <span>${esc(n.short)}</span>
+        <span style="color:var(--mute);font-size:11px">${esc(n.who||"sin asignar")}</span></div>`}).join("")}</div>`;
+}
+
+const canvas=document.getElementById("canvas");
+let drag=null;
+const applyView=()=>document.getElementById("stage").setAttribute("transform",
+  `translate(${S.view.x},${S.view.y}) scale(${S.view.k})`);
+canvas.addEventListener("mousedown",e=>{ if(e.target.closest("[data-id]"))return;
+  drag={x:e.clientX-S.view.x,y:e.clientY-S.view.y}; });
+addEventListener("mousemove",e=>{ if(!drag)return;
+  S.view.x=e.clientX-drag.x; S.view.y=e.clientY-drag.y; applyView(); });
+addEventListener("mouseup",()=>drag=null);
+canvas.addEventListener("wheel",e=>{ if(!e.ctrlKey&&!e.metaKey)return; e.preventDefault();
+  S.view.k=Math.min(1.8,Math.max(.45,S.view.k-e.deltaY*.0016)); applyView(); },{passive:false});
+canvas.addEventListener("click",e=>{ const g=e.target.closest("[data-id]"); if(!g)return;
+  S.sel=S.sel===g.dataset.id?null:g.dataset.id; render(); });
+canvas.addEventListener("mouseover",e=>{ const g=e.target.closest("[data-id]");
+  const id=g?g.dataset.id:null; if(id!==S.hover){S.hover=id; if(!S.sel)render();} });
+canvas.addEventListener("mouseleave",()=>{ if(S.hover){S.hover=null; if(!S.sel)render();} });
+
+document.body.addEventListener("click",e=>{
+  const go=e.target.closest("[data-goto]");
+  if(go){ if(BY[go.dataset.goto]){S.sel=go.dataset.goto; render();} return; }
+  if(e.target.id==="btn-back"){S.sel=null; render();}
+});
+document.querySelectorAll("[data-toggle]").forEach(b=>b.addEventListener("click",()=>{
+  S[b.dataset.toggle]=!S[b.dataset.toggle]; b.classList.toggle("on",S[b.dataset.toggle]); render(); }));
+document.getElementById("btn-reset").addEventListener("click",()=>{
+  S.view={k:1,x:0,y:0}; S.sel=null; render(); });
+addEventListener("keydown",e=>{ if(e.key==="Escape"){ S.sel=null; closeModal(); render(); } });
+
+const veil=document.getElementById("veil"), statusEl=document.getElementById("status");
+const openModal=()=>{veil.classList.add("open"); document.getElementById("key").focus();};
+const closeModal=()=>veil.classList.remove("open");
+document.getElementById("btn-connect").addEventListener("click",openModal);
+document.getElementById("btn-close").addEventListener("click",closeModal);
+veil.addEventListener("click",e=>{if(e.target===veil)closeModal()});
+try{ const k=localStorage.getItem("linear_key");
+  if(k){document.getElementById("key").value=k; document.getElementById("remember").checked=true;}
+  const t=localStorage.getItem("linear_team"); if(t)document.getElementById("team").value=t;
+}catch(_){}
+
+const QUERY=`query CycleGraph($teamKey:String!){
+  teams(filter:{key:{eq:$teamKey}},first:1){nodes{key name
+    activeCycle{id name number startsAt endsAt
+      issues(first:250){nodes{
+        ...Core
+        children(first:50){nodes{...Lite}}
+        relations(first:50){nodes{type relatedIssue{...Lite}}}
+        inverseRelations(first:50){nodes{type issue{...Lite}}}
+      }}}}}}
+fragment Core on Issue{identifier title estimate url state{name type} assignee{displayName} parent{identifier}}
+fragment Lite on Issue{identifier title estimate url state{name type} assignee{displayName} parent{identifier} cycle{id}}`;
+
+function shorten(t){
+  let s=String(t||"").trim();
+  const m=s.match(/quiero\s+(?:que\s+)?(.+?)(?:,\s*para|\.|$)/i);
+  if(m) s=m[1];
+  s=s.replace(/^\[[^\]]+\]\s*/,"").replace(/^Como\s+[^,]+,\s*/i,"");
+  s=s.charAt(0).toUpperCase()+s.slice(1);
+  return s.length>44?s.slice(0,43)+"…":s;
+}
+function initials(n){ if(!n)return null; const p=n.trim().split(/\s+/);
+  return p.length>1?`${p[0]} ${p[1][0]}.`:p[0]; }
+function fromLinear(json){
+  if(json.errors?.length) throw new Error(json.errors.map(e=>e.message).join(" · "));
+  const team=json.data?.teams?.nodes?.[0];
+  if(!team) throw new Error("No encontré ese equipo. Es el prefijo de las issues: MOVO-123 → MOVO.");
+  const cyc=team.activeCycle;
+  if(!cyc) throw new Error(`${team.name} no tiene un ciclo activo en este momento.`);
+  const inCycle=new Set(cyc.issues.nodes.map(i=>i.identifier));
+  const map=new Map();
+  const add=(i,f)=>{ if(!i)return;
+    if(map.has(i.identifier)){ if(f) map.get(i.identifier).inCycle=true; return; }
+    map.set(i.identifier,{id:i.identifier,title:i.title,short:shorten(i.title),
+      status:i.state?.name||"?",type:i.state?.type||"backlog",pts:i.estimate??null,
+      who:initials(i.assignee?.displayName),parent:i.parent?.identifier||null,inCycle:!!f}); };
+  cyc.issues.nodes.forEach(i=>add(i,true));
+  const blocks=new Set();
+  cyc.issues.nodes.forEach(i=>{
+    (i.relations?.nodes||[]).forEach(r=>{ if(r.type!=="blocks")return;
+      add(r.relatedIssue,inCycle.has(r.relatedIssue.identifier));
+      blocks.add(i.identifier+"|"+r.relatedIssue.identifier); });
+    (i.inverseRelations?.nodes||[]).forEach(r=>{ if(r.type!=="blocks")return;
+      add(r.issue,inCycle.has(r.issue.identifier));
+      blocks.add(r.issue.identifier+"|"+i.identifier); });
+    (i.children?.nodes||[]).forEach(c=>add(c,inCycle.has(c.identifier)));
+  });
+  const fmt=d=>d?new Date(d).toLocaleDateString("es-AR",{day:"numeric",month:"short"}):"";
+  return {cycle:{team:team.name,name:cyc.name||("Cycle "+cyc.number),start:fmt(cyc.startsAt),
+      end:fmt(cyc.endsAt),taken:new Date().toLocaleString("es-AR",{dateStyle:"short",timeStyle:"short"}),
+      live:true,workspace:DATA.cycle.workspace},
+    analysis:null, nodes:[...map.values()], blocks:[...blocks].map(s=>s.split("|"))};
+}
+function applyData(d){ DATA=d; S.sel=null; S.view={k:1,x:0,y:0}; render(); closeModal(); }
+function say(m,c){ statusEl.style.color=c||"var(--mute)"; statusEl.textContent=m; }
+
+document.getElementById("btn-fetch").addEventListener("click",async()=>{
+  const key=document.getElementById("key").value.trim();
+  const team=document.getElementById("team").value.trim().toUpperCase();
+  if(!key) return say("Falta la API key.","var(--stop)");
+  say("Consultando Linear…");
+  try{
+    const res=await fetch("https://api.linear.app/graphql",{method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":key},
+      body:JSON.stringify({query:QUERY,variables:{teamKey:team}})});
+    if(res.status===401||res.status===403) throw new Error("La API key fue rechazada (HTTP "+res.status+").");
+    const d=fromLinear(await res.json());
+    try{ if(document.getElementById("remember").checked){
+        localStorage.setItem("linear_key",key); localStorage.setItem("linear_team",team);
+      }else localStorage.removeItem("linear_key");
+    }catch(_){}
+    say(`Listo: ${d.nodes.filter(n=>n.inCycle).length} issues del ciclo.`,"var(--flow)");
+    applyData(d);
+  }catch(err){
+    const cors=/Failed to fetch|NetworkError|load failed/i.test(err.message);
+    say(cors?"El navegador bloqueó la consulta. Usá linear-snapshot.mjs y cargá el JSON acá abajo.":err.message,"var(--stop)");
+  }
+});
+document.getElementById("btn-file").addEventListener("click",()=>document.getElementById("file").click());
+document.getElementById("file").addEventListener("change",async e=>{
+  const f=e.target.files[0]; if(!f)return;
+  try{ const raw=JSON.parse(await f.text());
+    say("Archivo cargado.","var(--flow)"); applyData(raw.data?fromLinear(raw):raw);
+  }catch(err){ say("No pude leer ese archivo: "+err.message,"var(--stop)"); }
+});
+addEventListener("dragover",e=>e.preventDefault());
+addEventListener("drop",async e=>{
+  e.preventDefault(); const f=e.dataTransfer.files[0]; if(!f||!/\.json$/i.test(f.name))return;
+  try{ const raw=JSON.parse(await f.text()); applyData(raw.data?fromLinear(raw):raw); }
+  catch(err){ openModal(); say("No pude leer ese archivo: "+err.message,"var(--stop)"); }
+});
+
+render();
+</script>
+</body>
+</html>
