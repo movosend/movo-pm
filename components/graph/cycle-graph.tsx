@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from "react"
 
+import { CycleHeader } from "@/components/graph/cycle-header"
 import { EmptyCycleError } from "@/components/graph/empty-cycle-error"
 import { OrphanTray } from "@/components/graph/orphan-tray"
 import { SidePanel } from "@/components/graph/side-panel"
 import { statusColorVar } from "@/components/graph/status-color"
 import { ToggleBar, type ToggleKey } from "@/components/graph/toggle-bar"
+import { usePollingSync } from "@/hooks/use-polling-sync"
 import { buildGraph } from "@/lib/graph/build"
 import { detectCycles } from "@/lib/graph/cycles"
 import { LAYOUT_METRICS, layoutGraph } from "@/lib/graph/layout"
@@ -85,6 +87,8 @@ export function CycleGraph({
 
   const selectedNode = selected ? (nodesById.get(selected) ?? null) : null
 
+  usePollingSync()
+
   function handleCanvasMouseDown(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("[data-node-id]")) return
     setDrag({ x: e.clientX - view.x, y: e.clientY - view.y })
@@ -104,6 +108,14 @@ export function CycleGraph({
 
   return (
     <div className="flex h-full flex-col">
+      {!fullscreen && (
+        <CycleHeader
+          cycle={snapshot.cycle}
+          nodes={snapshot.nodes}
+          openBlocksCount={openBlocksList.length}
+          chainLength={chain.length}
+        />
+      )}
       <ToggleBar
         active={active}
         onToggle={setActive}
