@@ -1,5 +1,11 @@
-import { db } from "../lib/db/client"
+import { neon } from "@neondatabase/serverless"
+import { drizzle } from "drizzle-orm/neon-http"
+
 import { allowedUsers } from "../lib/db/schema"
+
+// Standalone script: builds its own connection instead of importing
+// lib/db/client.ts, which is guarded by "server-only" for the Next.js app.
+const db = drizzle(neon(process.env.DATABASE_URL!))
 
 // Usage: npm run db:seed-allowlist -- alice@movosend.com bob@movosend.com
 async function main() {
