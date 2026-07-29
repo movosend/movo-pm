@@ -43,7 +43,7 @@ export function CycleGraph({
   const [selected, setSelected] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
   const [active, setActive] = useState<ToggleKey[]>(["showOutside"])
-  const [view, setView] = useState({ k: 1, x: 0, y: 0 })
+  const [view, setView] = useState({ k: fullscreen ? 1.35 : 1, x: 0, y: 0 })
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null)
 
   const showOutside = active.includes("showOutside")
@@ -108,7 +108,7 @@ export function CycleGraph({
         active={active}
         onToggle={setActive}
         onReset={() => {
-          setView({ k: 1, x: 0, y: 0 })
+          setView({ k: fullscreen ? 1.35 : 1, x: 0, y: 0 })
           setSelected(null)
         }}
       />

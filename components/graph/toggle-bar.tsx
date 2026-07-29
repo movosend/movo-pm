@@ -19,6 +19,7 @@ export function ToggleBar({
   return (
     <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
       <ToggleGroup
+        multiple
         variant="outline"
         size="sm"
         value={active}
