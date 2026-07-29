@@ -6,12 +6,12 @@ import { AnalyzeButton } from "@/components/graph/analyze-button"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import type { Graph } from "@/lib/graph/build"
 import { walk } from "@/lib/graph/metrics"
 import type { Bottleneck, StrandedChildren } from "@/lib/graph/metrics"
 import type { Analysis, Node } from "@/lib/schema/snapshot"
 import { statusColorVar, statusTextVar } from "@/components/graph/status-color"
+import { cn } from "@/lib/utils"
 
 const SEVERITY_LABEL: Record<Analysis["decisions"][number]["sev"], string> = {
   alta: "Alta",
@@ -80,6 +80,7 @@ export function SidePanel({
   workspace,
   onSelect,
   onBack,
+  onHover,
 }: {
   selected: Node | null
   nodesById: Map<string, Node>
@@ -92,6 +93,7 @@ export function SidePanel({
   workspace: string
   onSelect: (id: string) => void
   onBack: () => void
+  onHover: (id: string | null) => void
 }) {
   return (
     <ScrollArea className="h-full">
@@ -114,6 +116,7 @@ export function SidePanel({
             openBlocksList={openBlocksList}
             analysis={analysis}
             onSelect={onSelect}
+            onHover={onHover}
           />
         )}
       </div>
@@ -265,6 +268,7 @@ function SummaryView({
   openBlocksList,
   analysis,
   onSelect,
+  onHover,
 }: {
   nodesById: Map<string, Node>
   chain: string[]
@@ -273,6 +277,7 @@ function SummaryView({
   openBlocksList: Array<[string, string]>
   analysis: Analysis | null
   onSelect: (id: string) => void
+  onHover: (id: string | null) => void
 }) {
   return (
     <>
@@ -284,7 +289,11 @@ function SummaryView({
               <div key={i} className="rounded-md border p-3">
                 <Badge
                   variant={d.sev === "alta" ? "destructive" : "secondary"}
-                  className="mb-1.5"
+                  className={cn(
+                    "mb-1.5",
+                    d.sev === "media" &&
+                      "bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
+                  )}
                 >
                   {SEVERITY_LABEL[d.sev]}
                 </Badge>
@@ -299,6 +308,8 @@ function SummaryView({
                         key={id}
                         type="button"
                         onClick={() => onSelect(id)}
+                        onMouseEnter={() => onHover(id)}
+                        onMouseLeave={() => onHover(null)}
                         className="rounded border px-1.5 py-0.5 text-[10.5px] font-semibold"
                       >
                         {id}
@@ -414,29 +425,6 @@ function SummaryView({
           </p>
         )}
       </Section>
-
-      <Separator className="mb-4" />
-      <div className="flex flex-wrap gap-3.5 text-[11.5px] text-muted-foreground">
-        {(
-          [
-            ["started", "In Progress"],
-            ["started", "In Review"],
-            ["unstarted", "Todo"],
-            ["completed", "Done"],
-            ["backlog", "Backlog"],
-          ] as const
-        ).map(([type, label]) => (
-          <div key={label} className="flex items-center gap-1.5">
-            <span
-              className="size-1.5 rounded-full"
-              style={{
-                background: statusColorVar({ type, status: label }),
-              }}
-            />
-            {label}
-          </div>
-        ))}
-      </div>
     </>
   )
 }

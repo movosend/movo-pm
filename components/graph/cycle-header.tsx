@@ -4,13 +4,9 @@ import type { Cycle, Node } from "@/lib/schema/snapshot"
 export function CycleHeader({
   cycle,
   nodes,
-  openBlocksCount,
-  chainLength,
 }: {
   cycle: Cycle
   nodes: Node[]
-  openBlocksCount: number
-  chainLength: number
 }) {
   const inCycle = nodes.filter((n) => n.inCycle)
   const done = inCycle.filter((n) => n.type === "completed")
@@ -31,32 +27,15 @@ export function CycleHeader({
       <div className="ml-auto flex flex-wrap gap-7">
         <Stat label="cerradas" value={`${done.length}/${inCycle.length}`} />
         <Stat label="puntos" value={`${donePts}/${pts}`} />
-        <Stat
-          label="bloqueos abiertos"
-          value={String(openBlocksCount)}
-          emphasis
-        />
-        <Stat label="cadena más larga" value={String(chainLength)} />
       </div>
     </header>
   )
 }
 
-function Stat({
-  label,
-  value,
-  emphasis,
-}: {
-  label: string
-  value: string
-  emphasis?: boolean
-}) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div
-        className="text-xl leading-tight font-semibold tracking-tight"
-        style={emphasis ? { color: "var(--status-stop)" } : undefined}
-      >
+      <div className="text-xl leading-tight font-semibold tracking-tight">
         {value}
       </div>
       <div className="text-[10.5px] font-medium tracking-wide text-muted-foreground uppercase">

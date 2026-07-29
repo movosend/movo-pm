@@ -12,7 +12,7 @@ import { analysisSchema } from "@/lib/schema/snapshot"
 import type { Analysis, Snapshot } from "@/lib/schema/snapshot"
 
 const PLAYBOOK_PATH = path.join(process.cwd(), "docs", "analysis-playbook.md")
-const MODEL = "claude-opus-5"
+const MODEL = "claude-sonnet-5"
 
 let client: Anthropic | null = null
 function getClient(): Anthropic {

@@ -91,9 +91,10 @@
   --status-stop: oklch(0.6 0.21 25);
   --status-flow: oklch(0.55 0.19 260);
   --status-review: oklch(0.52 0.19 300);
-  --status-wait: oklch(0.68 0.16 65);
-  --status-done: oklch(0.75 0 0);
+  --status-wait: oklch(0.6 0.01 260);
+  --status-done: oklch(0.6 0.15 145);
   --status-sleep: oklch(0.88 0 0);
+  --highlight: oklch(0.72 0.19 60);
 }
 
 .dark {
@@ -131,9 +132,10 @@
   --status-stop: oklch(0.65 0.2 25);
   --status-flow: oklch(0.7 0.15 260);
   --status-review: oklch(0.68 0.15 300);
-  --status-wait: oklch(0.75 0.14 65);
-  --status-done: oklch(0.45 0 0);
+  --status-wait: oklch(0.65 0.01 260);
+  --status-done: oklch(0.72 0.16 145);
   --status-sleep: oklch(0.32 0 0);
+  --highlight: oklch(0.78 0.18 60);
 }
 
 @layer base {
@@ -146,4 +148,30 @@
   html {
     @apply font-sans;
   }
+}
+
+@keyframes loading-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+@keyframes node-highlight {
+  0%,
+  100% {
+    opacity: 0.45;
+    stroke-width: 2;
+  }
+  50% {
+    opacity: 1;
+    stroke-width: 3.5;
+  }
+}
+
+.animate-node-highlight {
+  animation: node-highlight 1.1s ease-in-out infinite;
+  transform-origin: center;
 }

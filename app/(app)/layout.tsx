@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
@@ -11,9 +12,18 @@ export default async function AppLayout({
   const session = await auth()
 
   return (
-    <div className="flex min-h-svh flex-col">
+    <div className="flex h-svh flex-col overflow-hidden">
       <header className="flex items-center gap-4 border-b px-6 py-3">
-        <span className="text-sm font-medium">Movo PM</span>
+        <div className="flex items-center gap-2">
+          <Image
+            src="/logo.png"
+            alt=""
+            width={20}
+            height={20}
+            className="rounded-sm"
+          />
+          <span className="text-sm font-medium">Movo PM</span>
+        </div>
         <nav className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -48,7 +58,7 @@ export default async function AppLayout({
           </form>
         </div>
       </header>
-      <main className="flex-1">{children}</main>
+      <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
     </div>
   )
 }
