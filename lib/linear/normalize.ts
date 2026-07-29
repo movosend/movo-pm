@@ -1,0 +1,153 @@
+import type { Node, Snapshot } from "@/lib/schema/snapshot"
+
+// Raw shapes as returned by the CycleGraph query (see lib/linear/query.ts).
+// Mirrors the Core/Lite fragments — kept intentionally loose (no brand types)
+// since this is the only place that ever sees the raw Linear response.
+type LinearIssueLite = {
+  identifier: string
+  title: string
+  estimate: number | null
+  url: string
+  state: { name: string; type: string } | null
+  assignee: { displayName: string } | null
+  parent: { identifier: string } | null
+}
+
+type LinearIssueCore = LinearIssueLite & {
+  children?: { nodes: LinearIssueLite[] }
+  relations?: { nodes: { type: string; relatedIssue: LinearIssueLite }[] }
+  inverseRelations?: { nodes: { type: string; issue: LinearIssueLite }[] }
+}
+
+type LinearGraphQLResponse = {
+  errors?: { message: string }[]
+  data?: {
+    teams?: {
+      nodes: {
+        key: string
+        name: string
+        activeCycle: {
+          id: string
+          name: string | null
+          number: number
+          startsAt: string
+          endsAt: string
+          issues: { nodes: LinearIssueCore[] }
+        } | null
+      }[]
+    }
+  }
+}
+
+/**
+ * Ported verbatim from docs/mockup.html (shorten/initials/fromLinear,
+ * ~lines 524-563) — the contract is already validated against real Linear
+ * data, don't "improve" it without re-validating against the mockup.
+ */
+export function shorten(title: string | null | undefined): string {
+  let s = String(title ?? "").trim()
+  const m = s.match(/quiero\s+(?:que\s+)?(.+?)(?:,\s*para|\.|$)/i)
+  if (m) s = m[1]
+  s = s.replace(/^\[[^\]]+\]\s*/, "").replace(/^Como\s+[^,]+,\s*/i, "")
+  s = s.charAt(0).toUpperCase() + s.slice(1)
+  return s.length > 44 ? s.slice(0, 43) + "…" : s
+}
+
+export function initials(name: string | null | undefined): string | null {
+  if (!name) return null
+  const parts = name.trim().split(/\s+/)
+  return parts.length > 1 ? `${parts[0]} ${parts[1][0]}.` : parts[0]
+}
+
+function toNode(issue: LinearIssueLite, inCycle: boolean): Node {
+  return {
+    id: issue.identifier,
+    title: issue.title,
+    short: shorten(issue.title),
+    status: issue.state?.name ?? "?",
+    type: (issue.state?.type as Node["type"]) ?? "backlog",
+    pts: issue.estimate ?? null,
+    who: initials(issue.assignee?.displayName),
+    parent: issue.parent?.identifier ?? null,
+    inCycle,
+  }
+}
+
+export function fromLinearResponse(
+  json: LinearGraphQLResponse,
+  workspace: string
+): Snapshot {
+  if (json.errors?.length) {
+    throw new Error(json.errors.map((e) => e.message).join(" · "))
+  }
+
+  const team = json.data?.teams?.nodes?.[0]
+  if (!team) {
+    throw new Error(
+      "No encontré ese equipo. Es el prefijo de las issues: MOVO-123 → MOVO."
+    )
+  }
+
+  const cycle = team.activeCycle
+  if (!cycle) {
+    throw new Error(`${team.name} no tiene un ciclo activo en este momento.`)
+  }
+
+  const inCycleIds = new Set(cycle.issues.nodes.map((i) => i.identifier))
+  const map = new Map<string, Node>()
+
+  const add = (issue: LinearIssueLite | undefined, forceInCycle: boolean) => {
+    if (!issue) return
+    const existing = map.get(issue.identifier)
+    if (existing) {
+      if (forceInCycle) existing.inCycle = true
+      return
+    }
+    map.set(issue.identifier, toNode(issue, forceInCycle))
+  }
+
+  cycle.issues.nodes.forEach((issue) => add(issue, true))
+
+  const blocks = new Set<string>()
+  cycle.issues.nodes.forEach((issue) => {
+    ;(issue.relations?.nodes ?? []).forEach((r) => {
+      if (r.type !== "blocks") return
+      add(r.relatedIssue, inCycleIds.has(r.relatedIssue.identifier))
+      blocks.add(`${issue.identifier}|${r.relatedIssue.identifier}`)
+    })
+    ;(issue.inverseRelations?.nodes ?? []).forEach((r) => {
+      if (r.type !== "blocks") return
+      add(r.issue, inCycleIds.has(r.issue.identifier))
+      blocks.add(`${r.issue.identifier}|${issue.identifier}`)
+    })
+    ;(issue.children?.nodes ?? []).forEach((child) =>
+      add(child, inCycleIds.has(child.identifier))
+    )
+  })
+
+  const fmt = (d: string | null) =>
+    d
+      ? new Date(d).toLocaleDateString("es-AR", {
+          day: "numeric",
+          month: "short",
+        })
+      : ""
+
+  return {
+    cycle: {
+      team: team.name,
+      name: cycle.name ?? `Cycle ${cycle.number}`,
+      start: fmt(cycle.startsAt),
+      end: fmt(cycle.endsAt),
+      taken: new Date().toLocaleString("es-AR", {
+        dateStyle: "short",
+        timeStyle: "short",
+      }),
+      live: true,
+      workspace,
+    },
+    analysis: null,
+    nodes: [...map.values()],
+    blocks: [...blocks].map((s) => s.split("|") as [string, string]),
+  }
+}
