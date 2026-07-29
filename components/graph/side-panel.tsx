@@ -2,6 +2,7 @@
 
 import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react"
 
+import { AnalyzeButton } from "@/components/graph/analyze-button"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -275,6 +276,7 @@ function SummaryView({
 }) {
   return (
     <>
+      <AnalyzeButton hasAnalysis={Boolean(analysis)} />
       {analysis && analysis.decisions.length > 0 && (
         <Section label={`Decisiones a tomar · ${analysis.generated}`}>
           <div className="flex flex-col gap-2.5">
