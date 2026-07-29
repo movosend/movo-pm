@@ -11,6 +11,8 @@ function node(overrides: Partial<Node> & { id: string }): Node {
     parent: null,
     inCycle: true,
     description: null,
+    assigneeId: null,
+    stateId: null,
     ...overrides,
   }
 }
@@ -18,6 +20,8 @@ function node(overrides: Partial<Node> & { id: string }): Node {
 function snapshot(nodes: Node[], blocks: Array<[string, string]>): Snapshot {
   return {
     cycle: {
+      id: "cycle-test",
+      number: 1,
       team: "Movo Team",
       name: "Cycle Test",
       start: "1 ene",
@@ -29,6 +33,8 @@ function snapshot(nodes: Node[], blocks: Array<[string, string]>): Snapshot {
     analysis: null,
     nodes,
     blocks,
+    states: [],
+    members: [],
   }
 }
 

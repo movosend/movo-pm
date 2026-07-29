@@ -1,6 +1,13 @@
 "use client"
 
-import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
+import {
+  ArrowLeftIcon,
+  ExternalLinkIcon,
+  Loader2Icon,
+  PlusIcon,
+} from "lucide-react"
 
 import { AnalyzeButton } from "@/components/graph/analyze-button"
 import { Badge } from "@/components/ui/badge"
@@ -9,9 +16,30 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import type { Graph } from "@/lib/graph/build"
 import { walk } from "@/lib/graph/metrics"
 import type { Bottleneck, StrandedChildren } from "@/lib/graph/metrics"
-import type { Analysis, Node } from "@/lib/schema/snapshot"
+import type {
+  Analysis,
+  Cycle,
+  Node,
+  TeamMember,
+  TeamState,
+} from "@/lib/schema/snapshot"
 import { statusColorVar, statusTextVar } from "@/components/graph/status-color"
 import { cn } from "@/lib/utils"
+
+async function patchIssue(
+  issueId: string,
+  input: { assigneeId?: string | null; stateId?: string; cycleId?: string }
+) {
+  const res = await fetch("/api/issues", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ issueId, ...input }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error ?? "No se pudo actualizar la issue.")
+  }
+}
 
 const SEVERITY_LABEL: Record<Analysis["decisions"][number]["sev"], string> = {
   alta: "Alta",
@@ -51,6 +79,132 @@ function Row({
   )
 }
 
+function StatusSelect({
+  node,
+  states,
+}: {
+  node: Node
+  states: TeamState[]
+}) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const busy = saving || isPending
+
+  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const stateId = e.target.value
+    if (!stateId || stateId === node.stateId) return
+    setError(null)
+    setSaving(true)
+    patchIssue(node.id, { stateId })
+      .then(() => startTransition(() => router.refresh()))
+      .catch((err) => setError(err.message))
+      .finally(() => setSaving(false))
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-1.5">
+        {busy && (
+          <Loader2Icon className="size-3 shrink-0 animate-spin text-muted-foreground" />
+        )}
+        <select
+          value={node.stateId ?? ""}
+          onChange={handleChange}
+          disabled={busy}
+          className="cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 pr-0.5 pl-1.5 text-right text-xs font-semibold outline-none hover:border-border focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+          style={{ color: statusTextVar(node) }}
+        >
+          {states.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      {error && <p className="text-[10.5px] text-destructive">{error}</p>}
+    </div>
+  )
+}
+
+function AssigneeSelect({
+  node,
+  members,
+}: {
+  node: Node
+  members: TeamMember[]
+}) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const busy = saving || isPending
+
+  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const assigneeId = e.target.value || null
+    if (assigneeId === node.assigneeId) return
+    setError(null)
+    setSaving(true)
+    patchIssue(node.id, { assigneeId })
+      .then(() => startTransition(() => router.refresh()))
+      .catch((err) => setError(err.message))
+      .finally(() => setSaving(false))
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-1.5">
+        {busy && (
+          <Loader2Icon className="size-3 shrink-0 animate-spin text-muted-foreground" />
+        )}
+        <select
+          value={node.assigneeId ?? ""}
+          onChange={handleChange}
+          disabled={busy}
+          className="cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 pr-0.5 pl-1.5 text-right text-xs outline-none hover:border-border focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+        >
+          <option value="">sin asignar</option>
+          {members.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      {error && <p className="text-[10.5px] text-destructive">{error}</p>}
+    </div>
+  )
+}
+
+function AddToCycleButton({ node, cycle }: { node: Node; cycle: Cycle }) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  function handleClick() {
+    setError(null)
+    patchIssue(node.id, { cycleId: cycle.id })
+      .then(() => startTransition(() => router.refresh()))
+      .catch((err) => setError(err.message))
+  }
+
+  return (
+    <div className="mb-3.5 flex flex-col gap-1">
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={handleClick}
+        disabled={isPending}
+      >
+        <PlusIcon data-icon="inline-start" />
+        Agregar al ciclo {cycle.number}
+      </Button>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  )
+}
+
 function Section({
   label,
   children,
@@ -78,6 +232,9 @@ export function SidePanel({
   openBlocksList,
   analysis,
   workspace,
+  cycle,
+  states,
+  members,
   onSelect,
   onBack,
   onHover,
@@ -91,6 +248,9 @@ export function SidePanel({
   openBlocksList: Array<[string, string]>
   analysis: Analysis | null
   workspace: string
+  cycle: Cycle
+  states: TeamState[]
+  members: TeamMember[]
   onSelect: (id: string) => void
   onBack: () => void
   onHover: (id: string | null) => void
@@ -104,6 +264,9 @@ export function SidePanel({
             nodesById={nodesById}
             graph={graph}
             workspace={workspace}
+            cycle={cycle}
+            states={states}
+            members={members}
             onSelect={onSelect}
             onBack={onBack}
           />
@@ -129,6 +292,9 @@ function DetailView({
   nodesById,
   graph,
   workspace,
+  cycle,
+  states,
+  members,
   onSelect,
   onBack,
 }: {
@@ -136,6 +302,9 @@ function DetailView({
   nodesById: Map<string, Node>
   graph: Graph
   workspace: string
+  cycle: Cycle
+  states: TeamState[]
+  members: TeamMember[]
   onSelect: (id: string) => void
   onBack: () => void
 }) {
@@ -160,19 +329,20 @@ function DetailView({
         {node.title}
       </div>
 
+      {!node.inCycle && <AddToCycleButton node={node} cycle={cycle} />}
+
       <dl className="flex flex-col text-[12.5px]">
         <div className="flex items-center justify-between gap-3 border-b py-1.5">
           <dt className="text-muted-foreground">Estado</dt>
-          <dd
-            className="text-xs font-semibold"
-            style={{ color: statusTextVar(node) }}
-          >
-            {node.status}
+          <dd>
+            <StatusSelect node={node} states={states} />
           </dd>
         </div>
         <div className="flex items-center justify-between gap-3 border-b py-1.5">
           <dt className="text-muted-foreground">Responsable</dt>
-          <dd>{node.who ?? "sin asignar"}</dd>
+          <dd>
+            <AssigneeSelect node={node} members={members} />
+          </dd>
         </div>
         <div className="flex items-center justify-between gap-3 border-b py-1.5">
           <dt className="text-muted-foreground">Puntos</dt>

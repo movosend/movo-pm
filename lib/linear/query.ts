@@ -8,6 +8,20 @@ export const CYCLE_GRAPH_QUERY = `query CycleGraph($teamKey: String!) {
     nodes {
       key
       name
+      states(first: 50) {
+        nodes {
+          id
+          name
+          type
+          position
+        }
+      }
+      members(first: 50) {
+        nodes {
+          id
+          displayName
+        }
+      }
       activeCycle {
         id
         name
@@ -52,10 +66,12 @@ fragment Core on Issue {
   estimate
   url
   state {
+    id
     name
     type
   }
   assignee {
+    id
     displayName
   }
   parent {
@@ -68,10 +84,12 @@ fragment Lite on Issue {
   estimate
   url
   state {
+    id
     name
     type
   }
   assignee {
+    id
     displayName
   }
   parent {
@@ -79,5 +97,11 @@ fragment Lite on Issue {
   }
   cycle {
     id
+  }
+}`
+
+export const ISSUE_UPDATE_MUTATION = `mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
+  issueUpdate(id: $id, input: $input) {
+    success
   }
 }`

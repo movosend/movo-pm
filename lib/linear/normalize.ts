@@ -8,8 +8,8 @@ type LinearIssueLite = {
   title: string
   estimate: number | null
   url: string
-  state: { name: string; type: string } | null
-  assignee: { displayName: string } | null
+  state: { id: string; name: string; type: string } | null
+  assignee: { id: string; displayName: string } | null
   parent: { identifier: string } | null
 }
 
@@ -27,6 +27,10 @@ type LinearGraphQLResponse = {
       nodes: {
         key: string
         name: string
+        states?: {
+          nodes: { id: string; name: string; type: string; position: number }[]
+        }
+        members?: { nodes: { id: string; displayName: string }[] }
         activeCycle: {
           id: string
           name: string | null
@@ -75,6 +79,8 @@ function toNode(
     parent: issue.parent?.identifier ?? null,
     inCycle,
     description: issue.description ?? null,
+    assigneeId: issue.assignee?.id ?? null,
+    stateId: issue.state?.id ?? null,
   }
 }
 
@@ -140,6 +146,8 @@ export function fromLinearResponse(
 
   return {
     cycle: {
+      id: cycle.id,
+      number: cycle.number,
       team: team.name,
       name: cycle.name ?? `Cycle ${cycle.number}`,
       start: fmt(cycle.startsAt),
@@ -154,5 +162,11 @@ export function fromLinearResponse(
     analysis: null,
     nodes: [...map.values()],
     blocks: [...blocks].map((s) => s.split("|") as [string, string]),
+    states: [...(team.states?.nodes ?? [])]
+      .sort((a, b) => a.position - b.position)
+      .map((s) => ({ id: s.id, name: s.name, type: s.type as Node["type"] })),
+    members: (team.members?.nodes ?? [])
+      .map((m) => ({ id: m.id, name: m.displayName }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
   }
 }

@@ -540,6 +540,9 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
             openBlocksList={openBlocksList}
             analysis={snapshot.analysis}
             workspace={snapshot.cycle.workspace}
+            cycle={snapshot.cycle}
+            states={snapshot.states ?? []}
+            members={snapshot.members ?? []}
             onSelect={setSelected}
             onBack={() => setSelected(null)}
             onHover={setHovered}

@@ -1,8 +1,14 @@
 import "server-only"
 
-import { CYCLE_GRAPH_QUERY } from "@/lib/linear/query"
+import { CYCLE_GRAPH_QUERY, ISSUE_UPDATE_MUTATION } from "@/lib/linear/query"
 import { fromLinearResponse } from "@/lib/linear/normalize"
 import type { Snapshot } from "@/lib/schema/snapshot"
+
+export type IssueUpdateInput = {
+  assigneeId?: string | null
+  stateId?: string
+  cycleId?: string
+}
 
 /**
  * Boundary between "how we read Linear" and everything downstream.
@@ -12,6 +18,7 @@ import type { Snapshot } from "@/lib/schema/snapshot"
  */
 export interface LinearSource {
   getActiveCycleSnapshot(): Promise<Snapshot>
+  updateIssue(id: string, input: IssueUpdateInput): Promise<void>
 }
 
 const LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql"
@@ -46,6 +53,39 @@ class LinearApiKeySource implements LinearSource {
 
     const json = await res.json()
     return fromLinearResponse(json, this.workspace)
+  }
+
+  async updateIssue(id: string, input: IssueUpdateInput): Promise<void> {
+    const res = await fetch(LINEAR_GRAPHQL_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: this.apiKey,
+      },
+      body: JSON.stringify({
+        query: ISSUE_UPDATE_MUTATION,
+        variables: { id, input },
+      }),
+      cache: "no-store",
+    })
+
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        `La API key de Linear fue rechazada (HTTP ${res.status}).`
+      )
+    }
+
+    const json = await res.json()
+    if (json.errors?.length) {
+      throw new Error(
+        (json.errors as { message: string }[])
+          .map((e) => e.message)
+          .join(" · ")
+      )
+    }
+    if (!json.data?.issueUpdate?.success) {
+      throw new Error("Linear no confirmó el cambio.")
+    }
   }
 }
 

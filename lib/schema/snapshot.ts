@@ -25,11 +25,15 @@ export const nodeSchema = z.object({
    * short output goes into the analysis prompt.
    */
   description: z.string().nullable(),
+  assigneeId: z.string().nullable(),
+  stateId: z.string().nullable(),
 })
 
 export const blockSchema = z.tuple([z.string(), z.string()])
 
 export const cycleSchema = z.object({
+  id: z.string(),
+  number: z.number(),
   team: z.string(),
   name: z.string(),
   start: z.string(),
@@ -37,6 +41,17 @@ export const cycleSchema = z.object({
   taken: z.string(),
   live: z.boolean(),
   workspace: z.string(),
+})
+
+export const teamStateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: issueTypeSchema,
+})
+
+export const teamMemberSchema = z.object({
+  id: z.string(),
+  name: z.string(),
 })
 
 export const decisionSchema = z.object({
@@ -58,12 +73,16 @@ export const snapshotSchema = z.object({
   analysis: analysisSchema.nullable(),
   nodes: z.array(nodeSchema),
   blocks: z.array(blockSchema),
+  states: z.array(teamStateSchema),
+  members: z.array(teamMemberSchema),
 })
 
 export type IssueType = z.infer<typeof issueTypeSchema>
 export type Node = z.infer<typeof nodeSchema>
 export type Block = z.infer<typeof blockSchema>
 export type Cycle = z.infer<typeof cycleSchema>
+export type TeamState = z.infer<typeof teamStateSchema>
+export type TeamMember = z.infer<typeof teamMemberSchema>
 export type Decision = z.infer<typeof decisionSchema>
 export type Analysis = z.infer<typeof analysisSchema>
 export type Snapshot = z.infer<typeof snapshotSchema>
