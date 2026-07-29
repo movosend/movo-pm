@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Image from "next/image"
 
 import { Button } from "@/components/ui/button"
@@ -10,6 +11,10 @@ import {
 } from "@/components/ui/card"
 import { auth, signIn } from "@/auth"
 import { redirect } from "next/navigation"
+
+export const metadata: Metadata = {
+  title: "Log in",
+}
 
 function GitHubIcon(props: React.ComponentProps<"svg">) {
   return (

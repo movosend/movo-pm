@@ -69,6 +69,20 @@ export async function insertSyncLog(params: {
   })
 }
 
+export async function listRecentAnalyses(limit = 200) {
+  return db
+    .select({
+      id: analyses.id,
+      model: analyses.model,
+      generatedAt: analyses.generatedAt,
+      inputTokens: analyses.inputTokens,
+      outputTokens: analyses.outputTokens,
+    })
+    .from(analyses)
+    .orderBy(desc(analyses.generatedAt))
+    .limit(limit)
+}
+
 export async function countAnalysesToday(): Promise<number> {
   const startOfDay = new Date()
   startOfDay.setHours(0, 0, 0, 0)

@@ -1,3 +1,5 @@
+import type { Metadata } from "next"
+
 import { CycleGraph } from "@/components/graph/cycle-graph"
 import { SyncButton } from "@/components/graph/sync-button"
 import {
@@ -9,6 +11,10 @@ import {
 } from "@/components/ui/empty"
 import { getLatestSnapshot } from "@/lib/db/queries"
 import type { Snapshot } from "@/lib/schema/snapshot"
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+}
 
 export default async function Page() {
   const row = await getLatestSnapshot(process.env.LINEAR_TEAM_KEY!)
