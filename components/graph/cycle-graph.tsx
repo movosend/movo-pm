@@ -37,18 +37,12 @@ function elbow(a: { x: number; y: number }, b: { x: number; y: number }) {
   return `M${sx},${sy} L${mx - r},${sy} Q${mx},${sy} ${mx},${sy + s * r} L${mx},${ty - s * r} Q${mx},${ty} ${mx + r},${ty} L${tx},${ty}`
 }
 
-export function CycleGraph({
-  snapshot,
-  fullscreen = false,
-}: {
-  snapshot: Snapshot
-  fullscreen?: boolean
-}) {
+export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
   const [active, setActive] = useState<ToggleKey[]>(["showOutside"])
-  const [view, setView] = useState({ k: fullscreen ? 1.35 : 1, x: 0, y: 0 })
+  const [view, setView] = useState({ k: 1, x: 0, y: 0 })
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null)
   const [animating, setAnimating] = useState(false)
   const [orphansMounted, setOrphansMounted] = useState(false)
@@ -203,20 +197,13 @@ export function CycleGraph({
 
   return (
     <div className="flex h-full flex-col">
-      {!fullscreen && (
-        <CycleHeader cycle={snapshot.cycle} nodes={snapshot.nodes} />
-      )}
+      <CycleHeader cycle={snapshot.cycle} nodes={snapshot.nodes} />
       <ToggleBar
         active={active}
         onToggle={setActive}
         onReset={() => {
           setSelected(null)
-          animateTo(
-            centeredView(
-              fullscreen ? 1.35 : 1,
-              showOrphans ? orphanAreaHeight : 0
-            )
-          )
+          animateTo(centeredView(1, showOrphans ? orphanAreaHeight : 0))
         }}
       />
       <EmptyCycleError cycles={cycles} />
@@ -542,24 +529,22 @@ export function CycleGraph({
           </svg>
           <StatusLegend />
         </div>
-        {!fullscreen && (
-          <aside className="min-h-0 w-[356px] shrink-0 overflow-hidden border-l">
-            <SidePanel
-              selected={selectedNode}
-              nodesById={nodesById}
-              graph={graph}
-              chain={chain}
-              bottlenecksList={bottlenecksList}
-              stranded={strandedList}
-              openBlocksList={openBlocksList}
-              analysis={snapshot.analysis}
-              workspace={snapshot.cycle.workspace}
-              onSelect={setSelected}
-              onBack={() => setSelected(null)}
-              onHover={setHovered}
-            />
-          </aside>
-        )}
+        <aside className="min-h-0 w-[356px] shrink-0 overflow-hidden border-l">
+          <SidePanel
+            selected={selectedNode}
+            nodesById={nodesById}
+            graph={graph}
+            chain={chain}
+            bottlenecksList={bottlenecksList}
+            stranded={strandedList}
+            openBlocksList={openBlocksList}
+            analysis={snapshot.analysis}
+            workspace={snapshot.cycle.workspace}
+            onSelect={setSelected}
+            onBack={() => setSelected(null)}
+            onHover={setHovered}
+          />
+        </aside>
       </div>
     </div>
   )

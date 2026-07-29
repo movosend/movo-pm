@@ -2,7 +2,8 @@ import Image from "next/image"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
-import { auth, signOut } from "@/auth"
+import { ProfileMenu } from "@/components/profile-menu"
+import { auth } from "@/auth"
 
 export default async function AppLayout({
   children,
@@ -33,29 +34,13 @@ export default async function AppLayout({
           >
             Grafo
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            render={<Link href="/planning" />}
-            nativeButton={false}
-          >
-            Modo planning
-          </Button>
         </nav>
         <div className="ml-auto flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">
-            {session?.user?.name ?? session?.user?.email}
-          </span>
-          <form
-            action={async () => {
-              "use server"
-              await signOut({ redirectTo: "/login" })
-            }}
-          >
-            <Button type="submit" variant="ghost" size="sm">
-              Salir
-            </Button>
-          </form>
+          <ProfileMenu
+            name={session?.user?.name}
+            email={session?.user?.email}
+            image={session?.user?.image}
+          />
         </div>
       </header>
       <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
