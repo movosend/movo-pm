@@ -1,7 +1,8 @@
 import type { Graph } from "@/lib/graph/build"
 import type { Node } from "@/lib/schema/snapshot"
 
-function walk(start: string, map: Record<string, string[]>): Set<string> {
+/** Every node reachable from `start` following `map` (preds or succs). */
+export function walk(start: string, map: Record<string, string[]>): Set<string> {
   const out = new Set<string>()
   const queue = [...(map[start] ?? [])]
   while (queue.length) {
