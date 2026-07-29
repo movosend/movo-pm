@@ -14,6 +14,7 @@ type LinearIssueLite = {
 }
 
 type LinearIssueCore = LinearIssueLite & {
+  description?: string | null
   children?: { nodes: LinearIssueLite[] }
   relations?: { nodes: { type: string; relatedIssue: LinearIssueLite }[] }
   inverseRelations?: { nodes: { type: string; issue: LinearIssueLite }[] }
@@ -59,7 +60,10 @@ export function initials(name: string | null | undefined): string | null {
   return parts.length > 1 ? `${parts[0]} ${parts[1][0]}.` : parts[0]
 }
 
-function toNode(issue: LinearIssueLite, inCycle: boolean): Node {
+function toNode(
+  issue: LinearIssueLite & { description?: string | null },
+  inCycle: boolean
+): Node {
   return {
     id: issue.identifier,
     title: issue.title,
@@ -70,6 +74,7 @@ function toNode(issue: LinearIssueLite, inCycle: boolean): Node {
     who: initials(issue.assignee?.displayName),
     parent: issue.parent?.identifier ?? null,
     inCycle,
+    description: issue.description ?? null,
   }
 }
 

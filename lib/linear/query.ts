@@ -48,6 +48,7 @@ export const CYCLE_GRAPH_QUERY = `query CycleGraph($teamKey: String!) {
 fragment Core on Issue {
   identifier
   title
+  description
   estimate
   url
   state {

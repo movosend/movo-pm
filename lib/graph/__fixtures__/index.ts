@@ -10,6 +10,7 @@ function node(overrides: Partial<Node> & { id: string }): Node {
     who: null,
     parent: null,
     inCycle: true,
+    description: null,
     ...overrides,
   }
 }

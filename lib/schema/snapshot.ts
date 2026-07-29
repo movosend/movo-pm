@@ -18,6 +18,13 @@ export const nodeSchema = z.object({
   who: z.string().nullable(),
   parent: z.string().nullable(),
   inCycle: z.boolean(),
+  /**
+   * Additive to the mockup's original contract — needed for M3's keyword
+   * extraction of external-dependency signals (preplan §2.6). Never sent to
+   * the model directly; only extractSignals() reads it, and only its
+   * short output goes into the analysis prompt.
+   */
+  description: z.string().nullable(),
 })
 
 export const blockSchema = z.tuple([z.string(), z.string()])
