@@ -1,11 +1,11 @@
 import "server-only"
 
-import { desc, eq } from "drizzle-orm"
+import { count, desc, eq, gte } from "drizzle-orm"
 
 import { db } from "@/lib/db/client"
 import { contentHash } from "@/lib/db/content-hash"
-import { snapshots, syncLog } from "@/lib/db/schema"
-import type { Snapshot } from "@/lib/schema/snapshot"
+import { analyses, snapshots, syncLog } from "@/lib/db/schema"
+import type { Analysis, Snapshot } from "@/lib/schema/snapshot"
 
 /**
  * Hash only the parts of a Snapshot that reflect real Linear content.
@@ -67,4 +67,47 @@ export async function insertSyncLog(params: {
     changed: params.changed,
     error: params.error ?? null,
   })
+}
+
+export async function countAnalysesToday(): Promise<number> {
+  const startOfDay = new Date()
+  startOfDay.setHours(0, 0, 0, 0)
+
+  const [row] = await db
+    .select({ value: count() })
+    .from(analyses)
+    .where(gte(analyses.generatedAt, startOfDay))
+
+  return row?.value ?? 0
+}
+
+export async function updateSnapshotAnalysis(
+  snapshotId: string,
+  payload: Snapshot
+) {
+  await db
+    .update(snapshots)
+    .set({ payload })
+    .where(eq(snapshots.id, snapshotId))
+}
+
+export async function insertAnalysis(params: {
+  snapshotId: string
+  model: string
+  payload: Analysis
+  inputTokens: number
+  outputTokens: number
+}) {
+  const [row] = await db
+    .insert(analyses)
+    .values({
+      snapshotId: params.snapshotId,
+      model: params.model,
+      payload: params.payload,
+      inputTokens: params.inputTokens,
+      outputTokens: params.outputTokens,
+    })
+    .returning()
+
+  return row
 }
