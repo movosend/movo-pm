@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { CycleHeader } from "@/components/graph/cycle-header"
 import { EmptyCycleError } from "@/components/graph/empty-cycle-error"
+import { IssueSearchCommand } from "@/components/graph/issue-search-command"
 import { SidePanel } from "@/components/graph/side-panel"
 import { statusColorVar } from "@/components/graph/status-color"
 import { StatusLegend } from "@/components/graph/status-legend"
@@ -46,6 +47,7 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null)
   const [animating, setAnimating] = useState(false)
   const [orphansMounted, setOrphansMounted] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const prevKRef = useRef(view.k)
   const animTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined
@@ -173,6 +175,10 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setSelected(null)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault()
+        setSearchOpen((v) => !v)
+      }
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
@@ -205,6 +211,7 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
           setSelected(null)
           animateTo(centeredView(1, showOrphans ? orphanAreaHeight : 0))
         }}
+        onOpenSearch={() => setSearchOpen(true)}
       />
       <EmptyCycleError cycles={cycles} />
       <div className="flex min-h-0 flex-1">
@@ -230,6 +237,9 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
               >
                 <path d="M0,0 L8,4 L0,8 Z" fill="context-stroke" />
               </marker>
+              <clipPath id="node-clip">
+                <rect width={NW} height={NH} rx={6} />
+              </clipPath>
             </defs>
             <g
               style={{
@@ -374,12 +384,10 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                       strokeDasharray={n.inCycle ? undefined : "3 3"}
                     />
                     <rect
-                      x={1.5}
-                      y={1.5}
-                      width={3.5}
-                      height={NH - 3}
-                      rx={1.75}
+                      width={4}
+                      height={NH}
                       fill={statusColorVar(n)}
+                      clipPath="url(#node-clip)"
                     />
                     <text
                       x={16}
@@ -490,12 +498,10 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                           strokeDasharray="3 3"
                         />
                         <rect
-                          x={1.5}
-                          y={1.5}
-                          width={3.5}
-                          height={NH - 3}
-                          rx={1.75}
+                          width={4}
+                          height={NH}
                           fill={statusColorVar(n)}
+                          clipPath="url(#node-clip)"
                         />
                         <text
                           x={16}
@@ -549,6 +555,11 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
           />
         </aside>
       </div>
+      <IssueSearchCommand
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        cycle={snapshot.cycle}
+      />
     </div>
   )
 }

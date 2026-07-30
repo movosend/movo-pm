@@ -24,22 +24,8 @@ import type {
   TeamState,
 } from "@/lib/schema/snapshot"
 import { statusColorVar, statusTextVar } from "@/components/graph/status-color"
+import { patchIssue } from "@/lib/api/patch-issue"
 import { cn } from "@/lib/utils"
-
-async function patchIssue(
-  issueId: string,
-  input: { assigneeId?: string | null; stateId?: string; cycleId?: string }
-) {
-  const res = await fetch("/api/issues", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ issueId, ...input }),
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => null)
-    throw new Error(body?.error ?? "No se pudo actualizar la issue.")
-  }
-}
 
 const SEVERITY_LABEL: Record<Analysis["decisions"][number]["sev"], string> = {
   alta: "Alta",
@@ -79,13 +65,7 @@ function Row({
   )
 }
 
-function StatusSelect({
-  node,
-  states,
-}: {
-  node: Node
-  states: TeamState[]
-}) {
+function StatusSelect({ node, states }: { node: Node; states: TeamState[] }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [saving, setSaving] = useState(false)
@@ -193,12 +173,12 @@ function AddToCycleButton({ node, cycle }: { node: Node; cycle: Cycle }) {
     <div className="mb-3.5 flex flex-col gap-1">
       <Button
         size="sm"
-        variant="outline"
+        variant="default"
         onClick={handleClick}
         disabled={isPending}
       >
         <PlusIcon data-icon="inline-start" />
-        Agregar al ciclo {cycle.number}
+        Agregar al Ciclo {cycle.number + 1}
       </Button>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>

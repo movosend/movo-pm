@@ -105,3 +105,37 @@ export const ISSUE_UPDATE_MUTATION = `mutation IssueUpdate($id: String!, $input:
     success
   }
 }`
+
+export const TEAM_ID_QUERY = `query TeamId($teamKey: String!) {
+  teams(filter: { key: { eq: $teamKey } }, first: 1) {
+    nodes {
+      id
+    }
+  }
+}`
+
+/**
+ * `issueSearch` is deprecated by Linear in favor of `searchIssues`, which
+ * (unlike a plain title `containsIgnoreCase` filter) also matches on the
+ * issue identifier — that's what lets "MOVO-123" find that exact issue.
+ */
+export const ISSUE_SEARCH_QUERY = `query IssueIdentifierSearch($term: String!, $teamId: String!) {
+  searchIssues(term: $term, teamId: $teamId, first: 20) {
+    nodes {
+      identifier
+      title
+      estimate
+      url
+      state {
+        name
+        type
+      }
+      assignee {
+        displayName
+      }
+      cycle {
+        id
+      }
+    }
+  }
+}`

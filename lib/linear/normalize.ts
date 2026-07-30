@@ -1,4 +1,4 @@
-import type { Node, Snapshot } from "@/lib/schema/snapshot"
+import type { Node, SearchIssue, Snapshot } from "@/lib/schema/snapshot"
 
 // Raw shapes as returned by the CycleGraph query (see lib/linear/query.ts).
 // Mirrors the Core/Lite fragments — kept intentionally loose (no brand types)
@@ -169,4 +169,37 @@ export function fromLinearResponse(
       .map((m) => ({ id: m.id, name: m.displayName }))
       .sort((a, b) => a.name.localeCompare(b.name)),
   }
+}
+
+type LinearSearchIssue = {
+  identifier: string
+  title: string
+  estimate: number | null
+  url: string
+  state: { name: string; type: string } | null
+  assignee: { displayName: string } | null
+  cycle: { id: string } | null
+}
+
+type LinearSearchResponse = {
+  errors?: { message: string }[]
+  data?: { searchIssues?: { nodes: LinearSearchIssue[] } }
+}
+
+export function fromSearchResponse(json: LinearSearchResponse): SearchIssue[] {
+  if (json.errors?.length) {
+    throw new Error(json.errors.map((e) => e.message).join(" · "))
+  }
+
+  return (json.data?.searchIssues?.nodes ?? []).map((issue) => ({
+    id: issue.identifier,
+    short: shorten(issue.title),
+    title: issue.title,
+    status: issue.state?.name ?? "?",
+    type: (issue.state?.type as Node["type"]) ?? "backlog",
+    pts: issue.estimate ?? null,
+    who: initials(issue.assignee?.displayName),
+    url: issue.url,
+    cycleId: issue.cycle?.id ?? null,
+  }))
 }

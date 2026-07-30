@@ -1,8 +1,9 @@
 "use client"
 
-import { RotateCcwIcon } from "lucide-react"
+import { RotateCcwIcon, SearchIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Kbd, KbdGroup } from "@/components/ui/kbd"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 export type ToggleKey = "showOutside" | "showParents" | "showOrphans"
@@ -11,10 +12,12 @@ export function ToggleBar({
   active,
   onToggle,
   onReset,
+  onOpenSearch,
 }: {
   active: ToggleKey[]
   onToggle: (keys: ToggleKey[]) => void
   onReset: () => void
+  onOpenSearch: () => void
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
@@ -33,10 +36,16 @@ export function ToggleBar({
         <RotateCcwIcon data-icon="inline-start" />
         Reencuadrar
       </Button>
-      <span className="ml-auto hidden text-xs text-muted-foreground md:inline">
-        clic para aislar una cadena · arrastrar para mover · ⌘/ctrl + scroll
-        para zoom
-      </span>
+      <div className="ml-auto flex items-center gap-3">
+        <Button variant="secondary" size="sm" onClick={onOpenSearch}>
+          <SearchIcon data-icon="inline-start" />
+          Agregar issue
+          <KbdGroup>
+            <Kbd>⌘</Kbd>
+            <Kbd>K</Kbd>
+          </KbdGroup>
+        </Button>
+      </div>
     </div>
   )
 }

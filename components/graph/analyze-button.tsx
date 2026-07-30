@@ -56,16 +56,16 @@ export function AnalyzeButton({ hasAnalysis }: { hasAnalysis: boolean }) {
           <SparkleIcon className="size-4 shrink-0 animate-pulse text-foreground" />
           <p
             key={step}
-            className="animate-in fade-in slide-in-from-bottom-1 min-w-0 flex-1 truncate text-xs font-medium duration-300"
+            className="min-w-0 flex-1 animate-in truncate text-xs font-medium duration-300 fade-in slide-in-from-bottom-1"
           >
             {STEPS[step]}
           </p>
-          <span className="shrink-0 text-[10.5px] tabular-nums text-muted-foreground">
+          <span className="shrink-0 text-[10.5px] text-muted-foreground tabular-nums">
             {elapsed}s
           </span>
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-muted">
-          <div className="h-full w-1/3 rounded-full bg-foreground/70 [animation:loading-sweep_1.3s_ease-in-out_infinite]" />
+          <div className="h-full w-1/3 [animation:loading-sweep_1.3s_ease-in-out_infinite] rounded-full bg-foreground/70" />
         </div>
       </div>
     )
@@ -73,7 +73,7 @@ export function AnalyzeButton({ hasAnalysis }: { hasAnalysis: boolean }) {
 
   return (
     <div className="mb-6 flex flex-col gap-2">
-      <Button size="sm" variant="outline" onClick={handleGenerate}>
+      <Button size="sm" variant="default" onClick={handleGenerate}>
         <SparkleIcon data-icon="inline-start" />
         {hasAnalysis ? "Actualizar análisis" : "Generar análisis"}
       </Button>

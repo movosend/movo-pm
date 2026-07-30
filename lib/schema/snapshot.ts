@@ -54,6 +54,18 @@ export const teamMemberSchema = z.object({
   name: z.string(),
 })
 
+export const searchIssueSchema = z.object({
+  id: z.string(),
+  short: z.string(),
+  title: z.string(),
+  status: z.string(),
+  type: issueTypeSchema,
+  pts: z.number().nullable(),
+  who: z.string().nullable(),
+  url: z.string(),
+  cycleId: z.string().nullable(),
+})
+
 export const decisionSchema = z.object({
   sev: z.enum(["alta", "media", "baja"]),
   title: z.string(),
@@ -83,6 +95,7 @@ export type Block = z.infer<typeof blockSchema>
 export type Cycle = z.infer<typeof cycleSchema>
 export type TeamState = z.infer<typeof teamStateSchema>
 export type TeamMember = z.infer<typeof teamMemberSchema>
+export type SearchIssue = z.infer<typeof searchIssueSchema>
 export type Decision = z.infer<typeof decisionSchema>
 export type Analysis = z.infer<typeof analysisSchema>
 export type Snapshot = z.infer<typeof snapshotSchema>

@@ -17,11 +17,11 @@ export default async function AppLayout({
           <Image
             src="/logo.png"
             alt=""
-            width={20}
-            height={20}
-            className="rounded-sm"
+            width={30}
+            height={30}
+            className="rounded-md"
           />
-          <span className="text-sm font-medium">Movo PM</span>
+          <span className="text-sm font-medium">Movo Project Manager</span>
         </div>
         <div className="ml-auto flex items-center gap-3">
           <ProfileMenu
