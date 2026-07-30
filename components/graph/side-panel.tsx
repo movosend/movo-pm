@@ -48,10 +48,17 @@ function Row({
   onSelect: (id: string) => void
 }) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(node.id)}
-      className="-mx-2 flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onSelect(node.id)
+        }
+      }}
+      className="-mx-2 flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-muted"
     >
       <span
         className="size-1.5 shrink-0 rounded-full"
@@ -62,7 +69,7 @@ function Row({
         <span className="block text-[11px] text-muted-foreground">{sub}</span>
       </span>
       {extra}
-    </button>
+    </div>
   )
 }
 
@@ -230,6 +237,45 @@ function AddToCycleButton({ node, cycle }: { node: Node; cycle: Cycle }) {
   )
 }
 
+function AddChildToCycleButton({ node, cycle }: { node: Node; cycle: Cycle }) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const busy = saving || isPending
+
+  function handleClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    setError(null)
+    setSaving(true)
+    patchIssue(node.id, { cycleId: cycle.id })
+      .then(() => startTransition(() => router.refresh()))
+      .catch((err) => setError(err.message))
+      .finally(() => setSaving(false))
+  }
+
+  if (error) {
+    return <p className="text-[10.5px] text-destructive">{error}</p>
+  }
+
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="h-6 px-2 text-[11px]"
+      onClick={handleClick}
+      disabled={busy}
+    >
+      {busy ? (
+        <Loader2Icon className="size-3 animate-spin" />
+      ) : (
+        <PlusIcon data-icon="inline-start" />
+      )}
+      Agregar
+    </Button>
+  )
+}
+
 function Section({
   label,
   children,
@@ -335,6 +381,7 @@ function DetailView({
 }) {
   const preds = graph.preds[node.id] ?? []
   const downstream = [...walk(node.id, graph.succs)]
+  const children = [...nodesById.values()].filter((n) => n.parent === node.id)
 
   return (
     <>
@@ -396,6 +443,28 @@ function DetailView({
       </dl>
 
       <div className="mt-5">
+        {children.length > 0 && (
+          <Section label={`Sub-issues · ${children.length}`}>
+            {children.map((child) => (
+              <Row
+                key={child.id}
+                node={child}
+                sub={`${child.id} · ${child.status}`}
+                extra={
+                  child.inCycle ? (
+                    <span className="text-[11px] text-muted-foreground">
+                      en ciclo
+                    </span>
+                  ) : (
+                    <AddChildToCycleButton node={child} cycle={cycle} />
+                  )
+                }
+                onSelect={onSelect}
+              />
+            ))}
+          </Section>
+        )}
+
         <Section label={`Bloqueado por · ${preds.length}`}>
           {preds.length ? (
             preds.map((id) => {
