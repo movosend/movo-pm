@@ -26,6 +26,15 @@ const { nodeWidth: NW, nodeHeight: NH } = LAYOUT_METRICS
 const ORPHAN_TOP_GAP = 40
 const ORPHAN_LABEL_HEIGHT = 34
 
+function toggleKey(prev: ToggleKey[], key: ToggleKey): ToggleKey[] {
+  return prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"))
+}
+
 function elbow(a: { x: number; y: number }, b: { x: number; y: number }) {
   const sx = a.x + NW
   const sy = a.y + NH / 2
@@ -174,15 +183,32 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setSelected(null)
+      if (e.key === "Escape") {
+        setSelected(null)
+        return
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault()
         setSearchOpen((v) => !v)
+        return
+      }
+      if (searchOpen || isTypingTarget(e.target)) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === "1") {
+        setActive((prev) => toggleKey(prev, "showOutside"))
+      } else if (e.key === "2") {
+        setActive((prev) => toggleKey(prev, "showParents"))
+      } else if (e.key === "3") {
+        setActive((prev) => toggleKey(prev, "showOrphans"))
+      } else if (e.key.toLowerCase() === "r") {
+        setSelected(null)
+        animateTo(centeredView(1, showOrphans ? orphanAreaHeight : 0))
       }
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchOpen, showOrphans, orphanAreaHeight])
 
   function handleCanvasMouseDown(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("[data-node-id]")) return

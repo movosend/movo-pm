@@ -28,13 +28,23 @@ export function ToggleBar({
         value={active}
         onValueChange={(value) => onToggle(value as ToggleKey[])}
       >
-        <ToggleGroupItem value="showOutside">Fuera del ciclo</ToggleGroupItem>
-        <ToggleGroupItem value="showParents">Padre / hijo</ToggleGroupItem>
-        <ToggleGroupItem value="showOrphans">Sin dependencias</ToggleGroupItem>
+        <ToggleGroupItem value="showOutside">
+          Fuera del ciclo
+          <Kbd>1</Kbd>
+        </ToggleGroupItem>
+        <ToggleGroupItem value="showParents">
+          Padre / hijo
+          <Kbd>2</Kbd>
+        </ToggleGroupItem>
+        <ToggleGroupItem value="showOrphans">
+          Sin dependencias
+          <Kbd>3</Kbd>
+        </ToggleGroupItem>
       </ToggleGroup>
       <Button variant="outline" size="sm" onClick={onReset}>
         <RotateCcwIcon data-icon="inline-start" />
         Reencuadrar
+        <Kbd>R</Kbd>
       </Button>
       <div className="ml-auto flex items-center gap-3">
         <Button variant="secondary" size="sm" onClick={onOpenSearch}>
