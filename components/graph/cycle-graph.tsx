@@ -7,6 +7,7 @@ import { CycleHeader } from "@/components/graph/cycle-header"
 import { EmptyCycleError } from "@/components/graph/empty-cycle-error"
 import { IssueSearchCommand } from "@/components/graph/issue-search-command"
 import { SidePanel } from "@/components/graph/side-panel"
+import { UserHighlightCommand } from "@/components/graph/user-highlight-command"
 import { statusColorVar } from "@/components/graph/status-color"
 import { StatusLegend } from "@/components/graph/status-legend"
 import { ToggleBar, type ToggleKey } from "@/components/graph/toggle-bar"
@@ -62,6 +63,10 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
   const [animating, setAnimating] = useState(false)
   const [orphansMounted, setOrphansMounted] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [userPaletteOpen, setUserPaletteOpen] = useState(false)
+  const [highlightedUserId, setHighlightedUserId] = useState<string | null>(
+    null
+  )
   const [estimating, setEstimating] = useState<string | null>(null)
   const [estimateBuffer, setEstimateBuffer] = useState("")
   const [errorNode, setErrorNode] = useState<string | null>(null)
@@ -137,6 +142,18 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
   }, [activeFocus, layout])
 
   const selectedNode = selected ? (nodesById.get(selected) ?? null) : null
+  const highlightedMember = highlightedUserId
+    ? (snapshot.members ?? []).find((m) => m.id === highlightedUserId)
+    : null
+
+  const highlightedNodeIds = useMemo(() => {
+    if (!highlightedUserId) return null
+    return new Set(
+      snapshot.nodes
+        .filter((n) => n.assigneeId === highlightedUserId)
+        .map((n) => n.id)
+    )
+  }, [snapshot, highlightedUserId])
 
   usePollingSync()
 
@@ -251,7 +268,14 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
       }
 
       if (e.key === "Escape") {
-        setSelected(null)
+        if (selected) {
+          setSelected(null)
+          return
+        }
+        if (highlightedUserId) {
+          setHighlightedUserId(null)
+          return
+        }
         return
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -259,7 +283,7 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
         setSearchOpen((v) => !v)
         return
       }
-      if (searchOpen || isTypingTarget(e.target)) return
+      if (searchOpen || userPaletteOpen || isTypingTarget(e.target)) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
       if (e.key === "1") {
         setActive((prev) => toggleKey(prev, "showOutside"))
@@ -277,6 +301,9 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
           setEstimating(target)
           setEstimateBuffer("")
         }
+      } else if (e.key.toLowerCase() === "u") {
+        e.preventDefault()
+        setUserPaletteOpen(true)
       }
     }
     window.addEventListener("keydown", onKeyDown)
@@ -284,12 +311,14 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     searchOpen,
+    userPaletteOpen,
     showOrphans,
     orphanAreaHeight,
     hovered,
     selected,
     estimating,
     estimateBuffer,
+    highlightedUserId,
   ])
 
   function handleCanvasMouseDown(e: React.MouseEvent) {
@@ -320,6 +349,9 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
           animateTo(centeredView(1, showOrphans ? orphanAreaHeight : 0))
         }}
         onOpenSearch={() => setSearchOpen(true)}
+        onOpenUserPalette={() => setUserPaletteOpen(true)}
+        highlightedUserName={highlightedMember?.name}
+        onClearHighlight={() => setHighlightedUserId(null)}
       />
       <EmptyCycleError cycles={cycles} />
       <div className="flex min-h-0 flex-1">
@@ -400,7 +432,7 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                       stroke="var(--status-review)"
                       strokeWidth={1}
                       strokeDasharray="2 4"
-                      opacity={lit ? 0.12 : 0.4}
+                      opacity={highlightedNodeIds ? 0.1 : lit ? 0.12 : 0.4}
                       markerEnd="url(#edge-arrow)"
                     />
                   )
@@ -408,8 +440,9 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
 
               {layout.edges
                 .map(([a, b]) => {
-                  const on = lit && lit.has(a) && lit.has(b)
-                  const off = lit && !on
+                  const on =
+                    !highlightedNodeIds && lit && lit.has(a) && lit.has(b)
+                  const off = highlightedNodeIds ? true : lit && !on
                   const blocker = nodesById.get(a)
                   const openEdge = blocker?.type !== "completed"
                   const stroke = on
@@ -429,7 +462,9 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                     fill="none"
                     stroke={stroke}
                     strokeWidth={on ? 1.8 : openEdge && !off ? 1.3 : 1}
-                    opacity={off ? 0.6 : 1}
+                    opacity={
+                      highlightedNodeIds ? 0.25 : off ? 0.6 : 1
+                    }
                     markerEnd="url(#edge-arrow)"
                   />
                 ))}
@@ -440,6 +475,7 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                 const on = !lit || lit.has(id)
                 const isSelected = selected === id
                 const isHovered = hovered === id
+                const userMatch = highlightedNodeIds?.has(id) ?? false
                 const blocked = (layout.preds[id] ?? []).some(
                   (x) => nodesById.get(x)?.type !== "completed"
                 )
@@ -451,7 +487,15 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                     key={id}
                     data-node-id={id}
                     transform={`translate(${p.x},${p.y})`}
-                    opacity={on ? 1 : 0.16}
+                    opacity={
+                      highlightedNodeIds
+                        ? userMatch
+                          ? 1
+                          : 0.14
+                        : on
+                          ? 1
+                          : 0.16
+                    }
                     className="cursor-pointer"
                     onMouseEnter={() => setHovered(id)}
                     onMouseLeave={() => setHovered(null)}
@@ -484,11 +528,15 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                           ? "var(--foreground)"
                           : isHovered
                             ? "var(--highlight)"
-                            : blocked
-                              ? "color-mix(in oklch, var(--status-stop) 35%, var(--border))"
-                              : "var(--border)"
+                            : userMatch
+                              ? "var(--primary)"
+                              : blocked
+                                ? "color-mix(in oklch, var(--status-stop) 35%, var(--border))"
+                                : "var(--border)"
                       }
-                      strokeWidth={isSelected || isHovered ? 1.6 : 1}
+                      strokeWidth={
+                        isSelected || isHovered || userMatch ? 1.6 : 1
+                      }
                       strokeDasharray={n.inCycle ? undefined : "3 3"}
                     />
                     <rect
@@ -590,19 +638,24 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                   {orphans.map((n) => {
                     const p = orphanPos[n.id]
                     if (!p) return null
+                    const userMatch = highlightedNodeIds?.has(n.id) ?? false
                     return (
                       <g
                         key={n.id}
                         transform={`translate(${p.x},${p.y})`}
-                        opacity={0.85}
+                        opacity={
+                          highlightedNodeIds ? (userMatch ? 1 : 0.14) : 0.85
+                        }
                       >
                         <rect
                           width={NW}
                           height={NH}
                           rx={6}
                           fill="var(--card)"
-                          stroke="var(--border)"
-                          strokeWidth={1}
+                          stroke={
+                            userMatch ? "var(--primary)" : "var(--border)"
+                          }
+                          strokeWidth={userMatch ? 1.6 : 1}
                           strokeDasharray="3 3"
                         />
                         <rect
@@ -699,6 +752,13 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
         open={searchOpen}
         onOpenChange={setSearchOpen}
         cycle={snapshot.cycle}
+      />
+      <UserHighlightCommand
+        open={userPaletteOpen}
+        onOpenChange={setUserPaletteOpen}
+        members={snapshot.members ?? []}
+        highlightedUserId={highlightedUserId}
+        onSelect={setHighlightedUserId}
       />
     </div>
   )
