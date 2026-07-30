@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 
 import { CycleHeader } from "@/components/graph/cycle-header"
 import { EmptyCycleError } from "@/components/graph/empty-cycle-error"
@@ -10,6 +11,7 @@ import { statusColorVar } from "@/components/graph/status-color"
 import { StatusLegend } from "@/components/graph/status-legend"
 import { ToggleBar, type ToggleKey } from "@/components/graph/toggle-bar"
 import { usePollingSync } from "@/hooks/use-polling-sync"
+import { patchIssue } from "@/lib/api/patch-issue"
 import { buildGraph } from "@/lib/graph/build"
 import { detectCycles } from "@/lib/graph/cycles"
 import { LAYOUT_METRICS, layoutGraph } from "@/lib/graph/layout"
@@ -21,6 +23,9 @@ import {
   walk,
 } from "@/lib/graph/metrics"
 import type { Snapshot } from "@/lib/schema/snapshot"
+
+const ESTIMATE_COMMIT_DELAY = 650
+const ESTIMATE_BUFFER_MAX_DIGITS = 2
 
 const { nodeWidth: NW, nodeHeight: NH } = LAYOUT_METRICS
 const ORPHAN_TOP_GAP = 40
@@ -57,11 +62,22 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
   const [animating, setAnimating] = useState(false)
   const [orphansMounted, setOrphansMounted] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [estimating, setEstimating] = useState<string | null>(null)
+  const [estimateBuffer, setEstimateBuffer] = useState("")
+  const [errorNode, setErrorNode] = useState<string | null>(null)
+  const router = useRouter()
+  const [, startEstimateTransition] = useTransition()
   const prevKRef = useRef(view.k)
   const animTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined
   )
   const orphanUnmountRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  )
+  const estimateTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  )
+  const errorNodeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined
   )
 
@@ -181,8 +197,59 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showOrphans, orphans.length])
 
+  function cancelEstimate() {
+    clearTimeout(estimateTimeoutRef.current)
+    setEstimating(null)
+    setEstimateBuffer("")
+  }
+
+  function commitEstimate(id: string, buffer: string) {
+    clearTimeout(estimateTimeoutRef.current)
+    setEstimating(null)
+    setEstimateBuffer("")
+    if (!buffer.length) return
+    const estimate = Number(buffer)
+    patchIssue(id, { estimate })
+      .then(() => startEstimateTransition(() => router.refresh()))
+      .catch(() => {
+        clearTimeout(errorNodeTimeoutRef.current)
+        setErrorNode(id)
+        errorNodeTimeoutRef.current = setTimeout(() => setErrorNode(null), 1600)
+      })
+  }
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if (estimating) {
+        if (isTypingTarget(e.target)) return
+        if (e.key === "Escape") {
+          e.preventDefault()
+          cancelEstimate()
+          return
+        }
+        if (e.key === "Enter") {
+          e.preventDefault()
+          if (estimateBuffer.length) commitEstimate(estimating, estimateBuffer)
+          else cancelEstimate()
+          return
+        }
+        if (/^[0-9]$/.test(e.key)) {
+          e.preventDefault()
+          const next = (estimateBuffer + e.key).slice(
+            0,
+            ESTIMATE_BUFFER_MAX_DIGITS
+          )
+          setEstimateBuffer(next)
+          clearTimeout(estimateTimeoutRef.current)
+          estimateTimeoutRef.current = setTimeout(
+            () => commitEstimate(estimating, next),
+            ESTIMATE_COMMIT_DELAY
+          )
+          return
+        }
+        cancelEstimate()
+      }
+
       if (e.key === "Escape") {
         setSelected(null)
         return
@@ -203,12 +270,27 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
       } else if (e.key.toLowerCase() === "r") {
         setSelected(null)
         animateTo(centeredView(1, showOrphans ? orphanAreaHeight : 0))
+      } else if (e.key.toLowerCase() === "e") {
+        const target = hovered ?? selected
+        if (target) {
+          e.preventDefault()
+          setEstimating(target)
+          setEstimateBuffer("")
+        }
       }
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchOpen, showOrphans, orphanAreaHeight])
+  }, [
+    searchOpen,
+    showOrphans,
+    orphanAreaHeight,
+    hovered,
+    selected,
+    estimating,
+    estimateBuffer,
+  ])
 
   function handleCanvasMouseDown(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("[data-node-id]")) return
@@ -557,6 +639,38 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                   })}
                 </g>
               )}
+
+              {(() => {
+                const badgeNode = estimating ?? errorNode
+                if (!badgeNode) return null
+                const p = layout.pos[badgeNode] ?? orphanPos[badgeNode]
+                if (!p) return null
+                const isError = !estimating && errorNode === badgeNode
+                return (
+                  <g
+                    transform={`translate(${p.x + NW / 2},${p.y - 12})`}
+                    className="pointer-events-none"
+                  >
+                    <rect
+                      x={-22}
+                      y={-13}
+                      width={44}
+                      height={20}
+                      rx={6}
+                      fill={isError ? "var(--status-stop)" : "var(--foreground)"}
+                    />
+                    <text
+                      x={0}
+                      y={1}
+                      textAnchor="middle"
+                      className="text-[11px] font-semibold"
+                      fill="var(--background)"
+                    >
+                      {isError ? "error" : `${estimateBuffer || "…"} pt`}
+                    </text>
+                  </g>
+                )
+              })()}
             </g>
           </svg>
           <StatusLegend />

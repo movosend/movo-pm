@@ -1,6 +1,11 @@
 export async function patchIssue(
   issueId: string,
-  input: { assigneeId?: string | null; stateId?: string; cycleId?: string }
+  input: {
+    assigneeId?: string | null
+    stateId?: string
+    cycleId?: string
+    estimate?: number | null
+  }
 ) {
   const res = await fetch("/api/issues", {
     method: "POST",

@@ -13,6 +13,7 @@ export type IssueUpdateInput = {
   assigneeId?: string | null
   stateId?: string
   cycleId?: string
+  estimate?: number | null
 }
 
 /**

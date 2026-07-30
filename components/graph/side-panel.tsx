@@ -25,6 +25,7 @@ import type {
 } from "@/lib/schema/snapshot"
 import { statusColorVar, statusTextVar } from "@/components/graph/status-color"
 import { patchIssue } from "@/lib/api/patch-issue"
+import { POINT_SCALE } from "@/lib/graph/points"
 import { cn } from "@/lib/utils"
 
 const SEVERITY_LABEL: Record<Analysis["decisions"][number]["sev"], string> = {
@@ -148,6 +149,50 @@ function AssigneeSelect({
           {members.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      {error && <p className="text-[10.5px] text-destructive">{error}</p>}
+    </div>
+  )
+}
+
+function PointsSelect({ node }: { node: Node }) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const busy = saving || isPending
+
+  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const raw = e.target.value
+    const estimate = raw === "" ? null : Number(raw)
+    if (estimate === (node.pts ?? null)) return
+    setError(null)
+    setSaving(true)
+    patchIssue(node.id, { estimate })
+      .then(() => startTransition(() => router.refresh()))
+      .catch((err) => setError(err.message))
+      .finally(() => setSaving(false))
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-1.5">
+        {busy && (
+          <Loader2Icon className="size-3 shrink-0 animate-spin text-muted-foreground" />
+        )}
+        <select
+          value={node.pts != null ? String(node.pts) : ""}
+          onChange={handleChange}
+          disabled={busy}
+          className="cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 pr-0.5 pl-1.5 text-right text-xs outline-none hover:border-border focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+        >
+          <option value="">sin estimar</option>
+          {POINT_SCALE.map((p) => (
+            <option key={p} value={p}>
+              {p} pt
             </option>
           ))}
         </select>
@@ -326,7 +371,9 @@ function DetailView({
         </div>
         <div className="flex items-center justify-between gap-3 border-b py-1.5">
           <dt className="text-muted-foreground">Puntos</dt>
-          <dd>{node.pts ?? "sin estimar"}</dd>
+          <dd>
+            <PointsSelect node={node} />
+          </dd>
         </div>
         <div className="flex items-center justify-between gap-3 border-b py-1.5">
           <dt className="text-muted-foreground">En el ciclo</dt>

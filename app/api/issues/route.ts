@@ -9,6 +9,7 @@ type RequestBody = {
   assigneeId?: unknown
   stateId?: unknown
   cycleId?: unknown
+  estimate?: unknown
 }
 
 export async function POST(request: Request) {
@@ -30,6 +31,10 @@ export async function POST(request: Request) {
   }
   if (typeof body?.stateId === "string") input.stateId = body.stateId
   if (typeof body?.cycleId === "string") input.cycleId = body.cycleId
+  if ("estimate" in (body ?? {})) {
+    input.estimate =
+      typeof body?.estimate === "number" ? body.estimate : null
+  }
 
   if (Object.keys(input).length === 0) {
     return NextResponse.json({ error: "nothing to update" }, { status: 400 })

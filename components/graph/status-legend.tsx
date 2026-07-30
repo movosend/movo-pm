@@ -1,4 +1,5 @@
 import { statusColorVar } from "@/components/graph/status-color"
+import { Kbd, KbdGroup } from "@/components/ui/kbd"
 
 const ENTRIES = [
   { type: "started", status: "In Progress", label: "In Progress" },
@@ -20,6 +21,13 @@ export function StatusLegend() {
           {label}
         </div>
       ))}
+      <div className="flex items-center gap-1.5 border-l pl-3">
+        Estimar
+        <KbdGroup>
+          <Kbd>E</Kbd>
+          <Kbd>nro</Kbd>
+        </KbdGroup>
+      </div>
     </div>
   )
 }
