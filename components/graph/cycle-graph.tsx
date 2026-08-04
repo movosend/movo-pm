@@ -41,16 +41,39 @@ function isTypingTarget(target: EventTarget | null) {
   return Boolean(target.closest("input, textarea, select, [contenteditable='true']"))
 }
 
-function elbow(a: { x: number; y: number }, b: { x: number; y: number }) {
-  const sx = a.x + NW
-  const sy = a.y + NH / 2
-  const tx = b.x
-  const ty = b.y + NH / 2
-  if (Math.abs(sy - ty) < 1) return `M${sx},${sy} L${tx},${ty}`
-  const mx = sx + Math.max(26, (tx - sx) / 2)
-  const r = Math.min(12, Math.abs(ty - sy) / 2)
-  const s = ty > sy ? 1 : -1
-  return `M${sx},${sy} L${mx - r},${sy} Q${mx},${sy} ${mx},${sy + s * r} L${mx},${ty - s * r} Q${mx},${ty} ${mx + r},${ty} L${tx},${ty}`
+type Point = { x: number; y: number }
+
+function dist(a: Point, b: Point) {
+  return Math.hypot(b.x - a.x, b.y - a.y)
+}
+
+/**
+ * SVG path through a routed polyline (dagre's dummy-node waypoints),
+ * with corners rounded. Handles bends of any angle, not just 90° —
+ * dagre's bend points aren't always axis-aligned.
+ */
+function roundedPath(points: Point[], radius = 10) {
+  if (points.length < 2) return ""
+  if (points.length === 2) {
+    return `M${points[0].x},${points[0].y} L${points[1].x},${points[1].y}`
+  }
+  let d = `M${points[0].x},${points[0].y}`
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1]
+    const curr = points[i]
+    const next = points[i + 1]
+    const d1 = dist(prev, curr)
+    const d2 = dist(curr, next)
+    const r = Math.min(radius, d1 / 2, d2 / 2)
+    const p1x = curr.x + ((prev.x - curr.x) / d1) * r
+    const p1y = curr.y + ((prev.y - curr.y) / d1) * r
+    const p2x = curr.x + ((next.x - curr.x) / d2) * r
+    const p2y = curr.y + ((next.y - curr.y) / d2) * r
+    d += ` L${p1x},${p1y} Q${curr.x},${curr.y} ${p2x},${p2y}`
+  }
+  const last = points[points.length - 1]
+  d += ` L${last.x},${last.y}`
+  return d
 }
 
 export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
@@ -329,14 +352,20 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
     if (!drag) return
     setView((v) => ({ ...v, x: e.clientX - drag.x, y: e.clientY - drag.y }))
   }
-  function handleCanvasWheel(e: React.WheelEvent) {
-    if (!e.ctrlKey && !e.metaKey) return
-    e.preventDefault()
-    setView((v) => ({
-      ...v,
-      k: Math.min(1.8, Math.max(0.45, v.k - e.deltaY * 0.0016)),
-    }))
-  }
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    function onWheel(e: WheelEvent) {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      setView((v) => ({
+        ...v,
+        k: Math.min(1.8, Math.max(0.45, v.k - e.deltaY * 0.0016)),
+      }))
+    }
+    el.addEventListener("wheel", onWheel, { passive: false })
+    return () => el.removeEventListener("wheel", onWheel)
+  }, [])
 
   return (
     <div className="flex h-full flex-col">
@@ -362,7 +391,6 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
           onMouseMove={handleCanvasMouseMove}
           onMouseUp={() => setDrag(null)}
           onMouseLeave={() => setDrag(null)}
-          onWheel={handleCanvasWheel}
         >
           <svg width="100%" height="100%">
             <defs>
@@ -452,13 +480,17 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                       : openEdge
                         ? "var(--status-stop)"
                         : "var(--muted-foreground)"
-                  return { a, b, on, off, openEdge, stroke }
+                  const points = layout.edgeRoutes[`${a}|${b}`] ?? [
+                    layout.pos[a],
+                    layout.pos[b],
+                  ]
+                  return { a, b, on, off, openEdge, stroke, points }
                 })
                 .sort((x, y) => Number(x.on) - Number(y.on))
-                .map(({ a, b, on, off, openEdge, stroke }) => (
+                .map(({ a, b, on, off, openEdge, stroke, points }) => (
                   <path
                     key={`${a}|${b}`}
-                    d={elbow(layout.pos[a], layout.pos[b])}
+                    d={roundedPath(points)}
                     fill="none"
                     stroke={stroke}
                     strokeWidth={on ? 1.8 : openEdge && !off ? 1.3 : 1}
