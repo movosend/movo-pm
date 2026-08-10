@@ -5,6 +5,7 @@ import { RotateCcwIcon, SearchIcon, UsersIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Kbd, KbdGroup } from "@/components/ui/kbd"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { SyncButton } from "@/components/graph/sync-button"
 
 export type ToggleKey = "showOutside" | "showParents" | "showOrphans"
 
@@ -74,6 +75,7 @@ export function ToggleBar({
             <Kbd>K</Kbd>
           </KbdGroup>
         </Button>
+        <SyncButton compact />
       </div>
     </div>
   )
