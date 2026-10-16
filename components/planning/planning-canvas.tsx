@@ -1,6 +1,12 @@
 "use client"
 import { useEffect, useId, useMemo, useRef, useState } from "react"
-import { FocusIcon, MinusIcon, PlusIcon, ScanIcon } from "lucide-react"
+import {
+  CheckIcon,
+  FocusIcon,
+  MinusIcon,
+  PlusIcon,
+  ScanIcon,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -8,10 +14,18 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { layoutGraph, LAYOUT_METRICS } from "@/lib/graph/layout"
+import { layoutGraph } from "@/lib/graph/layout"
 import { statusColorVar } from "@/components/graph/status-color"
 import type { Snapshot } from "@/lib/schema/snapshot"
+import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+
+const CARD = {
+  nodeWidth: 244,
+  nodeHeight: 88,
+  columnWidth: 320,
+  rowHeight: 118,
+}
 
 export function PlanningCanvas({
   snapshot,
@@ -39,11 +53,11 @@ export function PlanningCanvas({
   const lastLayout = useRef<Record<string, { x: number; y: number }>>({})
   const lastAnchor = useRef<string | null>(null)
   const layout = useMemo(() => {
-    const result = layoutGraph(snapshot, { showOutside: true })
+    const result = layoutGraph(snapshot, { showOutside: true, metrics: CARD })
     result.orphans.forEach((id, index) => {
       result.pos[id] = {
-        x: 46 + (index % 3) * LAYOUT_METRICS.columnWidth,
-        y: result.height + 30 + Math.floor(index / 3) * 86,
+        x: 46 + (index % 3) * CARD.columnWidth,
+        y: result.height + 30 + Math.floor(index / 3) * CARD.rowHeight,
       }
     })
     return result
@@ -71,8 +85,8 @@ export function PlanningCanvas({
     const rect = container.current?.getBoundingClientRect()
     if (point && rect)
       setView({
-        x: rect.width / 2 - (point.x + 103),
-        y: rect.height / 2 - (point.y + 32),
+        x: rect.width / 2 - (point.x + CARD.nodeWidth / 2),
+        y: rect.height / 2 - (point.y + CARD.nodeHeight / 2),
         k: 1,
       })
   }
@@ -87,8 +101,8 @@ export function PlanningCanvas({
     const points = Object.values(layout.pos)
     const rect = container.current?.getBoundingClientRect()
     if (!points.length || !rect) return
-    const w = Math.max(...points.map((p) => p.x)) + 252
-    const h = Math.max(...points.map((p) => p.y)) + 110
+    const w = Math.max(...points.map((p) => p.x)) + CARD.nodeWidth + 46
+    const h = Math.max(...points.map((p) => p.y)) + CARD.nodeHeight + 46
     const k = Math.min(
       1.2,
       Math.max(0.25, Math.min(rect.width / w, rect.height / h))
@@ -139,6 +153,16 @@ export function PlanningCanvas({
         >
           <FocusIcon />
         </Button>
+      </div>
+      <div className="pointer-events-none absolute right-3 bottom-3 flex items-center gap-3 rounded-lg border bg-background/95 px-3 py-2 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <span className="size-3 rounded border-2 border-primary/40 bg-accent" />
+          En el plan
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="size-3 rounded border border-dashed border-muted-foreground" />
+          Sugerida · no incluida
+        </span>
       </div>
       {!snapshot.nodes.length && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -223,7 +247,13 @@ export function PlanningCanvas({
             return (
               <g
                 key={node.id}
-                opacity={highlighted && !highlighted.has(node.id) ? 0.3 : 1}
+                opacity={
+                  highlighted &&
+                  !highlighted.has(node.id) &&
+                  selected !== node.id
+                    ? 0.3
+                    : 1
+                }
               >
                 {node.parent && (
                   <text
@@ -236,46 +266,86 @@ export function PlanningCanvas({
                     {(node.parentTitle ?? node.parent).slice(0, 35)}
                   </text>
                 )}
-                <foreignObject x={point.x} y={point.y} width="206" height="64">
+                {selected === node.id && (
+                  <rect
+                    x={point.x - 4}
+                    y={point.y - 4}
+                    width={CARD.nodeWidth + 8}
+                    height={CARD.nodeHeight + 8}
+                    rx={12}
+                    fill="none"
+                    stroke="var(--primary)"
+                    strokeWidth={2}
+                    className="pointer-events-none"
+                  />
+                )}
+                <foreignObject
+                  x={point.x}
+                  y={point.y}
+                  width={CARD.nodeWidth}
+                  height={CARD.nodeHeight}
+                >
                   <div
                     className={cn(
-                      "flex h-full items-center rounded-lg border bg-background",
-                      ghost && "border-dashed border-muted-foreground/60",
-                      selected === node.id && "border-ring ring-1 ring-ring"
+                      "flex h-full items-center overflow-hidden rounded-lg border-2",
+                      ghost
+                        ? "border-dashed border-muted-foreground/40 bg-background"
+                        : "border-primary/40 bg-accent"
                     )}
                   >
                     <button
-                      className="flex h-full min-w-0 flex-1 cursor-pointer flex-col justify-center gap-1 px-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="flex h-full min-w-0 flex-1 cursor-pointer flex-col justify-center gap-1 px-3 text-left outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
                       onClick={() => {
                         lastAnchor.current = node.id
                         onSelect(node.id)
                       }}
                     >
-                      <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <span className="flex w-full items-center gap-1.5 text-[10px] text-muted-foreground">
                         <span
-                          className="size-1.5 rounded-full"
+                          className="size-1.5 shrink-0 rounded-full"
                           style={{ background: statusColorVar(node) }}
                         />
                         {node.id}
-                        {ghost ? " · sugerida" : ` · ${node.pts ?? "—"} pt`}
+                        <span className="ml-auto">
+                          {node.pts === null ? "Sin estimar" : `${node.pts} pt`}
+                        </span>
                       </span>
                       <span
-                        className="w-full truncate text-xs"
+                        className={cn(
+                          "w-full truncate text-xs",
+                          !ghost && "font-medium"
+                        )}
                         title={node.title}
                       >
                         {node.short}
                       </span>
-                      <span className="w-full truncate text-[9px] text-muted-foreground">
-                        {node.cycleName ?? "Sin ciclo"}
+                      <span className="flex w-full items-center gap-2">
+                        <Badge variant={ghost ? "outline" : "secondary"}>
+                          {ghost ? (
+                            "Sugerida"
+                          ) : (
+                            <>
+                              <CheckIcon data-icon="inline-start" />
+                              En el plan
+                            </>
+                          )}
+                        </Badge>
+                        <span
+                          className="truncate text-[9px] text-muted-foreground"
+                          title={node.cycleName ?? "Sin ciclo"}
+                        >
+                          {node.cycleName ?? "Sin ciclo"}
+                        </span>
                       </span>
                     </button>
                     {ghost && (
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="icon-xs"
                         className="mr-2"
                         disabled={busy}
-                        aria-label={`Agregar ${node.id} a la hoja`}
+                        aria-label={`Agregar ${node.id} al plan`}
+                        title="Agregar al plan"
                         onClick={() => {
                           lastAnchor.current = node.id
                           onAdd(node.id)

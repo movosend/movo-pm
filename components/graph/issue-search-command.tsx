@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 
-import { Loader2Icon } from "lucide-react"
+import { Loader2Icon, PlusIcon } from "lucide-react"
 
 import {
   Command,
@@ -13,6 +13,8 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { statusColorVar } from "@/components/graph/status-color"
 import type { Cycle, Node, SearchIssue } from "@/lib/schema/snapshot"
 
@@ -22,12 +24,18 @@ export function IssueSearchCommand({
   cycle,
   nodes,
   onSelectIssue,
+  planning,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   cycle: Cycle
   nodes: Node[]
   onSelectIssue: (id: string) => void
+  planning?: {
+    included: Set<string>
+    busy: boolean
+    onAdd: (id: string) => void
+  }
 }) {
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<SearchIssue[]>([])
@@ -118,6 +126,12 @@ export function IssueSearchCommand({
       description="Buscá por título o código para ver el detalle de una issue o agregarla al ciclo."
     >
       <Command shouldFilter={false}>
+        {planning && (
+          <p className="border-b px-3 py-2 text-xs text-muted-foreground">
+            Abrí el detalle o usá + para agregar una US al plan, aunque no tenga
+            dependencias.
+          </p>
+        )}
         <CommandInput
           value={query}
           onValueChange={(value) => {
@@ -159,6 +173,27 @@ export function IssueSearchCommand({
                     {issue.cycleId === cycle.id ? " · en este ciclo" : ""}
                   </span>
                 </span>
+                {planning &&
+                  !issue.isEpic &&
+                  (planning.included.has(issue.id) ? (
+                    <Badge variant="secondary">En el plan</Badge>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="icon-xs"
+                      disabled={planning.busy}
+                      aria-label={`Agregar ${issue.id} al plan`}
+                      title="Agregar al plan"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        planning.onAdd(issue.id)
+                        handleOpenChange(false)
+                        onSelectIssue(issue.id)
+                      }}
+                    >
+                      <PlusIcon />
+                    </Button>
+                  ))}
               </CommandItem>
             ))}
           </CommandGroup>

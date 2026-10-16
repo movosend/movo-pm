@@ -15,9 +15,22 @@ import {
   executeTransferItem,
   reviewTransfer,
 } from "@/lib/planning/transfers"
+import { editDependency } from "@/lib/planning/dependencies"
 import { runSync } from "@/lib/sync/run-sync"
 const ids = z.array(z.string().min(1).max(150)).min(1).max(100)
 const actionSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("dependency"),
+    sourceId: z.string().min(1).max(150),
+    targetId: z.string().min(1).max(150),
+    direction: z.enum(["blocks", "blockedBy"]),
+    requestId: z.string().uuid(),
+  }),
+  z.object({
+    action: z.literal("removeDependency"),
+    sourceId: z.string().min(1).max(150),
+    removeId: z.string().uuid(),
+  }),
   z.object({
     action: z.literal("edit"),
     version: z.number().int().positive(),
@@ -92,6 +105,9 @@ export async function POST(request: Request, { params }: Context) {
   try {
     await requireStage(id)
     switch (body.action) {
+      case "dependency":
+      case "removeDependency":
+        return NextResponse.json(await editDependency(id, body))
       case "edit":
         return NextResponse.json({
           stage: await editStage(id, body.version, {

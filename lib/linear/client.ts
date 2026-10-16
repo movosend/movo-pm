@@ -1,4 +1,9 @@
 import "server-only"
+import {
+  calculateVelocity,
+  type Velocity,
+  type VelocityCycle,
+} from "@/lib/planning/forecast"
 import { mapConcurrent } from "@/lib/planning/concurrency"
 
 import {
@@ -25,6 +30,13 @@ export type { IssueUpdateInput } from "@/lib/schema/issue-update"
  * and its implementation change — nothing that consumes a Snapshot does.
  */
 export interface LinearSource {
+  getVelocity(): Promise<Velocity>
+  createDependency(
+    id: string,
+    blockerId: string,
+    blockedId: string
+  ): Promise<void>
+  deleteDependency(id: string): Promise<void>
   getPlanningCycles(): Promise<import("@/lib/planning/types").PlanningCycle[]>
   getActiveCycleSnapshot(): Promise<Snapshot>
   getIssueDetail(id: string, cycleId: string): Promise<IssueDetail>
@@ -191,6 +203,65 @@ class LinearApiKeySource implements LinearSource {
     ]
       .filter(Boolean)
       .map((c) => ({ ...c, name: c.name ?? `Ciclo ${c.number}` }))
+  }
+
+  async getVelocity(): Promise<Velocity> {
+    const teamId = await this.resolveTeamId()
+    const cycles: VelocityCycle[] = []
+    let after: string | null = null
+    do {
+      const json = await this.request(
+        `query VelocityCycles($id: String!, $after: String) {
+        team(id: $id) { cycles(first: 50, after: $after) {
+          nodes { id name number startsAt endsAt completedAt completedScopeHistory }
+          pageInfo { hasNextPage endCursor }
+        } }
+      }`,
+        { id: teamId, after }
+      )
+      const page = json.data.team.cycles
+      cycles.push(
+        ...page.nodes.map((cycle: VelocityCycle & { number: number }) => ({
+          ...cycle,
+          name: cycle.name ?? `Ciclo ${cycle.number}`,
+        }))
+      )
+      after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null
+    } while (after)
+    return calculateVelocity(cycles)
+  }
+
+  async createDependency(
+    id: string,
+    blockerId: string,
+    blockedId: string
+  ): Promise<void> {
+    const json = await this.request(
+      `mutation CreateBlockingRelation($input: IssueRelationCreateInput!) {
+      issueRelationCreate(input: $input) { success }
+    }`,
+      {
+        input: {
+          id,
+          issueId: blockerId,
+          relatedIssueId: blockedId,
+          type: "blocks",
+        },
+      }
+    )
+    if (!json.data?.issueRelationCreate?.success)
+      throw new Error("Linear no confirmó el bloqueo.")
+  }
+
+  async deleteDependency(id: string): Promise<void> {
+    const json = await this.request(
+      `mutation DeleteBlockingRelation($id: String!) {
+      issueRelationDelete(id: $id) { success }
+    }`,
+      { id }
+    )
+    if (!json.data?.issueRelationDelete?.success)
+      throw new Error("Linear no confirmó la eliminación del bloqueo.")
   }
 
   async getIssueValues(id: string): Promise<IssueValues> {

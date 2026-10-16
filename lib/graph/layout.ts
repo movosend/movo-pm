@@ -14,6 +14,7 @@ export const LAYOUT_METRICS = {
 export type LayoutOptions = {
   /** Mirrors the mockup's "Fuera del ciclo" toggle. */
   showOutside: boolean
+  metrics?: Partial<typeof LAYOUT_METRICS>
 }
 
 export type Point = { x: number; y: number }
@@ -42,8 +43,10 @@ export function layoutGraph(
   snapshot: Snapshot,
   options: LayoutOptions
 ): LayoutResult {
-  const { nodeWidth, nodeHeight, columnWidth, rowHeight, padding } =
-    LAYOUT_METRICS
+  const { nodeWidth, nodeHeight, columnWidth, rowHeight, padding } = {
+    ...LAYOUT_METRICS,
+    ...options.metrics,
+  }
 
   const visible = new Set(
     snapshot.nodes

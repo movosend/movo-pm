@@ -110,4 +110,4 @@ export type Snapshot = z.infer<typeof snapshotSchema>
 export type IssueDetail = Pick<
   Snapshot,
   "nodes" | "blocks" | "states" | "members"
->
+> & { blockingRelations?: { id: string; blocker: string; blocked: string }[] }

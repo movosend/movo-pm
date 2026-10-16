@@ -154,8 +154,8 @@ export const ISSUE_DETAIL_QUERY = `query IssueDetail($id: String!, $childrenAfte
     }
     parent { ...Lite }
     children(first: 50, after: $childrenAfter) { nodes { ...Lite } pageInfo { hasNextPage endCursor } }
-    relations(first: 50, after: $relationsAfter) { nodes { type relatedIssue { ...Lite } } pageInfo { hasNextPage endCursor } }
-    inverseRelations(first: 50, after: $inverseAfter) { nodes { type issue { ...Lite } } pageInfo { hasNextPage endCursor } }
+    relations(first: 50, after: $relationsAfter) { nodes { id type relatedIssue { ...Lite } } pageInfo { hasNextPage endCursor } }
+    inverseRelations(first: 50, after: $inverseAfter) { nodes { id type issue { ...Lite } } pageInfo { hasNextPage endCursor } }
   }
 }
 ${ISSUE_DETAIL_FRAGMENT}`

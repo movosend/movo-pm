@@ -241,8 +241,12 @@ type LinearDetailResponse = {
       | (DetailIssue & {
           parent: DetailIssue | null
           children: { nodes: DetailIssue[] }
-          relations: { nodes: { type: string; relatedIssue: DetailIssue }[] }
-          inverseRelations: { nodes: { type: string; issue: DetailIssue }[] }
+          relations: {
+            nodes: { id?: string; type: string; relatedIssue: DetailIssue }[]
+          }
+          inverseRelations: {
+            nodes: { id?: string; type: string; issue: DetailIssue }[]
+          }
           team: {
             states: {
               nodes: {
@@ -274,19 +278,33 @@ export function fromIssueDetailResponse(
   if (issue.parent) add(issue.parent)
   issue.children.nodes.forEach(add)
   const blocks: IssueDetail["blocks"] = []
+  const blockingRelations: NonNullable<IssueDetail["blockingRelations"]> = []
   for (const relation of issue.relations.nodes) {
     if (relation.type !== "blocks") continue
     add(relation.relatedIssue)
     blocks.push([issue.identifier, relation.relatedIssue.identifier])
+    if (relation.id)
+      blockingRelations.push({
+        id: relation.id,
+        blocker: issue.identifier,
+        blocked: relation.relatedIssue.identifier,
+      })
   }
   for (const relation of issue.inverseRelations.nodes) {
     if (relation.type !== "blocks") continue
     add(relation.issue)
     blocks.push([relation.issue.identifier, issue.identifier])
+    if (relation.id)
+      blockingRelations.push({
+        id: relation.id,
+        blocker: relation.issue.identifier,
+        blocked: issue.identifier,
+      })
   }
   return {
     nodes: [...nodes.values()],
     blocks,
+    blockingRelations,
     states: [...issue.team.states.nodes]
       .sort((a, b) => a.position - b.position)
       .map(({ id, name, type }) => ({ id, name, type })),

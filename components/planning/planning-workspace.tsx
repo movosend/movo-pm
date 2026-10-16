@@ -13,7 +13,7 @@ import {
   PanelRightIcon,
   PencilIcon,
   RefreshCwIcon,
-  SearchIcon,
+  PlusIcon,
   Undo2Icon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -42,6 +42,7 @@ import {
 } from "@/components/graph/issue-updates"
 import { SidePanel } from "@/components/graph/side-panel"
 import { IssueSearchCommand } from "@/components/graph/issue-search-command"
+import { planPoints } from "@/lib/planning/forecast"
 import { planningGraph } from "@/lib/planning/graph"
 import { buildGraph } from "@/lib/graph/build"
 import type { Cycle, IssueDetail, Node, Snapshot } from "@/lib/schema/snapshot"
@@ -54,6 +55,8 @@ import {
   type Transfer,
 } from "@/lib/planning/types"
 import { planningRequest } from "./api"
+import { PlanCapacity } from "./plan-capacity"
+import { DependencyDialog } from "./dependency-dialog"
 import { PlanningCanvas } from "./planning-canvas"
 import { TransferDialog } from "./transfer-dialog"
 
@@ -80,6 +83,7 @@ function Workspace({ stageId }: { stageId: string }) {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [search, setSearch] = useState(false)
+  const [dependencyOpen, setDependencyOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [running, setRunning] = useState<string | null>(null)
   const [undo, setUndo] = useState<MembershipChange[] | null>(null)
@@ -457,6 +461,7 @@ function Workspace({ stageId }: { stageId: string }) {
   const chosen = snapshot.nodes.filter(
     (node) => included.has(node.id) && !node.isEpic
   )
+  const points = planPoints(chosen)
   const outsideBlockers = [
     ...new Set(
       snapshot.blocks
@@ -479,7 +484,9 @@ function Workspace({ stageId }: { stageId: string }) {
       ? included
       : summaryFilter === "unestimated"
         ? new Set(
-            chosen.filter((node) => node.pts === null).map((node) => node.id)
+            chosen
+              .filter((node) => isPending(node) && node.pts === null)
+              .map((node) => node.id)
           )
         : summaryFilter === "blockers"
           ? new Set(outsideBlockers)
@@ -491,6 +498,7 @@ function Workspace({ stageId }: { stageId: string }) {
     onToggle: (node: Node) => {
       void membership([node.id], !included.has(node.id))
     },
+    onManageDependencies: () => setDependencyOpen(true),
     onAddMany: (ids: string[]) => {
       void membership(ids, true)
     },
@@ -558,11 +566,7 @@ function Workspace({ stageId }: { stageId: string }) {
         {(
           [
             ["all", "Issues incluidas", chosen.length],
-            [
-              "unestimated",
-              "Sin estimar",
-              chosen.filter((n) => n.pts === null).length,
-            ],
+            ["unestimated", "Sin estimar", points.unestimated],
             [
               "blockers",
               "Bloqueantes fuera de la hoja",
@@ -583,7 +587,7 @@ function Workspace({ stageId }: { stageId: string }) {
           </button>
         ))}
         <p className="px-2 pt-2 text-xs text-muted-foreground">
-          {chosen.reduce((sum, n) => sum + (n.pts ?? 0), 0)} puntos conocidos
+          {points.total} puntos conocidos
           {missing.length || Object.keys(failures).length
             ? " · datos incompletos"
             : ""}
@@ -809,8 +813,8 @@ function Workspace({ stageId }: { stageId: string }) {
       </header>
       <div className="flex flex-wrap items-center gap-3 border-b px-4 py-2">
         <Button variant="outline" size="sm" onClick={() => setSearch(true)}>
-          <SearchIcon data-icon="inline-start" />
-          Buscar issues
+          <PlusIcon data-icon="inline-start" />
+          Agregar US
         </Button>
         <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
           <Checkbox checked={resolved} onCheckedChange={setResolved} />
@@ -852,6 +856,11 @@ function Workspace({ stageId }: { stageId: string }) {
           </Button>
         </div>
       </div>
+      <PlanCapacity
+        stageId={stageId}
+        nodes={chosen}
+        incomplete={missing.length > 0 || Object.keys(failures).length > 0}
+      />
       {error && (
         <Alert variant="destructive">
           <AlertDescription>
@@ -925,7 +934,29 @@ function Workspace({ stageId }: { stageId: string }) {
         cycle={cycle}
         nodes={snapshot.nodes}
         onSelectIssue={select}
+        planning={{
+          included,
+          busy: planning.busy,
+          onAdd: (id) => {
+            void membership([id], true)
+          },
+        }}
       />
+      {dependencyOpen && selectedNode && selected && details[selected] && (
+        <DependencyDialog
+          key={selectedNode.id}
+          stageId={stageId}
+          source={selectedNode}
+          detail={details[selected]}
+          snapshot={snapshot}
+          open={dependencyOpen}
+          onOpenChange={setDependencyOpen}
+          onUpdated={async () => {
+            await refreshDetails()
+            notify("Dependencias actualizadas")
+          }}
+        />
+      )}
       {transferOpen && (
         <TransferDialog
           stageId={stageId}

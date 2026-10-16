@@ -174,6 +174,7 @@ export type PanelProps = {
     busy: boolean
     onToggle: (node: Node) => void
     onAddMany: (ids: string[]) => void
+    onManageDependencies?: () => void
   }
   selected: Node | null
   nodesById: Map<string, Node>
@@ -281,6 +282,16 @@ function DetailView({
         ) : !planning && !node.isEpic && !node.inCycle ? (
           <AddToCycleButton node={node} cycle={cycle} />
         ) : null}
+        {planning?.onManageDependencies && !node.isEpic && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={planning.busy || !planning.included.has(node.id)}
+            onClick={planning.onManageDependencies}
+          >
+            Editar dependencias
+          </Button>
+        )}
         {node.isEpic && (
           <p className="text-xs text-muted-foreground">
             Épica · Contexto compartido. El trabajo y las estimaciones
