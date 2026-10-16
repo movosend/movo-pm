@@ -167,7 +167,7 @@ function AddToCycleButton({ node, cycle }: { node: Node; cycle: Cycle }) {
     </Button>
   )
 }
-type PanelProps = {
+export type PanelProps = {
   selected: Node | null
   nodesById: Map<string, Node>
   graph: Graph
@@ -183,7 +183,7 @@ type PanelProps = {
   onSelect: (id: string) => void
   onBack: () => void
   onHover: (id: string | null) => void
-  onFocus: () => void
+  onFocus?: () => void
   onShareIssue: () => void
   group: Condition | null
   onGroup: (group: Condition | null) => void
@@ -247,10 +247,12 @@ function DetailView({
           {node.title}
         </h2>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={onFocus}>
-            <FocusIcon data-icon="inline-start" />
-            Enfocar en el grafo
-          </Button>
+          {onFocus && (
+            <Button variant="outline" size="sm" onClick={onFocus}>
+              <FocusIcon data-icon="inline-start" />
+              Enfocar en el grafo
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={onShareIssue}>
             <LinkIcon data-icon="inline-start" />
             Copiar enlace de issue

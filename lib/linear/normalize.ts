@@ -1,4 +1,9 @@
-import type { Node, SearchIssue, Snapshot } from "@/lib/schema/snapshot"
+import type {
+  IssueDetail,
+  Node,
+  SearchIssue,
+  Snapshot,
+} from "@/lib/schema/snapshot"
 
 // Raw shapes as returned by the CycleGraph query (see lib/linear/query.ts).
 // Mirrors the Core/Lite fragments — kept intentionally loose (no brand types)
@@ -202,4 +207,70 @@ export function fromSearchResponse(json: LinearSearchResponse): SearchIssue[] {
     url: issue.url,
     cycleId: issue.cycle?.id ?? null,
   }))
+}
+
+type DetailIssue = LinearIssueLite & {
+  description?: string | null
+  cycle?: { id: string } | null
+}
+type LinearDetailResponse = {
+  errors?: { message: string }[]
+  data?: {
+    issue?:
+      | (DetailIssue & {
+          parent: DetailIssue | null
+          children: { nodes: DetailIssue[] }
+          relations: { nodes: { type: string; relatedIssue: DetailIssue }[] }
+          inverseRelations: { nodes: { type: string; issue: DetailIssue }[] }
+          team: {
+            states: {
+              nodes: {
+                id: string
+                name: string
+                type: Node["type"]
+                position: number
+              }[]
+            }
+            members: { nodes: { id: string; displayName: string }[] }
+          }
+        })
+      | null
+  }
+}
+
+export function fromIssueDetailResponse(
+  json: LinearDetailResponse,
+  cycleId: string
+): IssueDetail {
+  if (json.errors?.length)
+    throw new Error(json.errors.map((e) => e.message).join(" · "))
+  const issue = json.data?.issue
+  if (!issue) throw new Error("No se encontró la issue en Linear.")
+  const nodes = new Map<string, Node>()
+  const add = (item: DetailIssue) =>
+    nodes.set(item.identifier, toNode(item, item.cycle?.id === cycleId))
+  add(issue)
+  if (issue.parent) add(issue.parent)
+  issue.children.nodes.forEach(add)
+  const blocks: IssueDetail["blocks"] = []
+  for (const relation of issue.relations.nodes) {
+    if (relation.type !== "blocks") continue
+    add(relation.relatedIssue)
+    blocks.push([issue.identifier, relation.relatedIssue.identifier])
+  }
+  for (const relation of issue.inverseRelations.nodes) {
+    if (relation.type !== "blocks") continue
+    add(relation.issue)
+    blocks.push([relation.issue.identifier, issue.identifier])
+  }
+  return {
+    nodes: [...nodes.values()],
+    blocks,
+    states: [...issue.team.states.nodes]
+      .sort((a, b) => a.position - b.position)
+      .map(({ id, name, type }) => ({ id, name, type })),
+    members: issue.team.members.nodes
+      .map(({ id, displayName }) => ({ id, name: displayName }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  }
 }

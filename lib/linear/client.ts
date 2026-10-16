@@ -3,11 +3,16 @@ import "server-only"
 import {
   CYCLE_GRAPH_QUERY,
   ISSUE_SEARCH_QUERY,
+  ISSUE_DETAIL_QUERY,
   ISSUE_UPDATE_MUTATION,
   TEAM_ID_QUERY,
 } from "@/lib/linear/query"
-import { fromLinearResponse, fromSearchResponse } from "@/lib/linear/normalize"
-import type { SearchIssue, Snapshot } from "@/lib/schema/snapshot"
+import {
+  fromLinearResponse,
+  fromSearchResponse,
+  fromIssueDetailResponse,
+} from "@/lib/linear/normalize"
+import type { IssueDetail, SearchIssue, Snapshot } from "@/lib/schema/snapshot"
 
 import type { IssueUpdateInput, IssueValues } from "@/lib/schema/issue-update"
 export type { IssueUpdateInput } from "@/lib/schema/issue-update"
@@ -20,6 +25,7 @@ export type { IssueUpdateInput } from "@/lib/schema/issue-update"
  */
 export interface LinearSource {
   getActiveCycleSnapshot(): Promise<Snapshot>
+  getIssueDetail(id: string, cycleId: string): Promise<IssueDetail>
   getIssueValues(id: string): Promise<IssueValues>
   updateIssue(id: string, input: IssueUpdateInput): Promise<void>
   searchIssues(term: string): Promise<SearchIssue[]>
@@ -69,6 +75,13 @@ class LinearApiKeySource implements LinearSource {
       teamKey: this.teamKey,
     })
     return fromLinearResponse(json, this.workspace)
+  }
+
+  async getIssueDetail(id: string, cycleId: string): Promise<IssueDetail> {
+    return fromIssueDetailResponse(
+      await this.request(ISSUE_DETAIL_QUERY, { id }),
+      cycleId
+    )
   }
 
   async getIssueValues(id: string): Promise<IssueValues> {

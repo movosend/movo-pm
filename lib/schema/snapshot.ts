@@ -99,3 +99,8 @@ export type SearchIssue = z.infer<typeof searchIssueSchema>
 export type Decision = z.infer<typeof decisionSchema>
 export type Analysis = z.infer<typeof analysisSchema>
 export type Snapshot = z.infer<typeof snapshotSchema>
+
+export type IssueDetail = Pick<
+  Snapshot,
+  "nodes" | "blocks" | "states" | "members"
+>

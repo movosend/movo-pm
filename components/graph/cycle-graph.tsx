@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button"
 import { CycleHeader } from "@/components/graph/cycle-header"
 import { EmptyCycleError } from "@/components/graph/empty-cycle-error"
 import { IssueSearchCommand } from "@/components/graph/issue-search-command"
+import { RemoteIssuePanel } from "@/components/graph/remote-issue-panel"
 import { SidePanel } from "@/components/graph/side-panel"
 import { UserHighlightCommand } from "@/components/graph/user-highlight-command"
 import { statusColorVar } from "@/components/graph/status-color"
@@ -483,8 +484,12 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
     return () => el.removeEventListener("wheel", onWheel)
   }, [])
 
+  const Panel = selected && !selectedNode ? RemoteIssuePanel : SidePanel
   const panel = (
-    <SidePanel
+    <Panel
+      key={selected ?? "summary"}
+      issueId={selected ?? ""}
+      snapshot={snapshot}
       selected={selectedNode}
       nodesById={nodesById}
       graph={graph}
@@ -558,16 +563,6 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
         <Alert>
           <AlertDescription>
             El ciclo del enlace cambió. Estás viendo los datos del ciclo actual.
-          </AlertDescription>
-        </Alert>
-      )}
-      {selected && !selectedNode && (
-        <Alert>
-          <AlertDescription>
-            La issue {selected} no está disponible en los datos actuales.{" "}
-            <Button variant="ghost" size="xs" onClick={() => setSelected(null)}>
-              Cerrar
-            </Button>
           </AlertDescription>
         </Alert>
       )}
@@ -1013,7 +1008,7 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
               aria-describedby="mobile-panel-description"
             >
               <SheetTitle className="sr-only">
-                {selectedNode ? selectedNode.title : "Acciones del ciclo"}
+                {selectedNode?.title ?? selected ?? "Acciones del ciclo"}
               </SheetTitle>
               <SheetDescription
                 id="mobile-panel-description"

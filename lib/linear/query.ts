@@ -1,3 +1,26 @@
+const ISSUE_DETAIL_FRAGMENT = `fragment Lite on Issue {
+  description
+  identifier
+  title
+  estimate
+  url
+  state {
+    id
+    name
+    type
+  }
+  assignee {
+    id
+    displayName
+  }
+  parent {
+    identifier
+  }
+  cycle {
+    id
+  }
+}`
+
 // Adapted from the query in movo-pm-preplan.md (Anexo): the preplan's
 // first:250/50/50/50 nesting exceeds Linear's query complexity budget in
 // practice ("Query too complex"). 100/20/20/20 is still well above what a
@@ -78,28 +101,7 @@ fragment Core on Issue {
     identifier
   }
 }
-fragment Lite on Issue {
-  description
-  identifier
-  title
-  estimate
-  url
-  state {
-    id
-    name
-    type
-  }
-  assignee {
-    id
-    displayName
-  }
-  parent {
-    identifier
-  }
-  cycle {
-    id
-  }
-}`
+${ISSUE_DETAIL_FRAGMENT}`
 
 export const ISSUE_UPDATE_MUTATION = `mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
   issueUpdate(id: $id, input: $input) {
@@ -140,3 +142,18 @@ export const ISSUE_SEARCH_QUERY = `query IssueIdentifierSearch($term: String!, $
     }
   }
 }`
+
+export const ISSUE_DETAIL_QUERY = `query IssueDetail($id: String!) {
+  issue(id: $id) {
+    ...Lite
+    team {
+      states(first: 50) { nodes { id name type position } }
+      members(first: 50) { nodes { id displayName } }
+    }
+    parent { ...Lite }
+    children(first: 50) { nodes { ...Lite } }
+    relations(first: 50) { nodes { type relatedIssue { ...Lite } } }
+    inverseRelations(first: 50) { nodes { type issue { ...Lite } } }
+  }
+}
+${ISSUE_DETAIL_FRAGMENT}`
