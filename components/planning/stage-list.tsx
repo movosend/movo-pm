@@ -7,6 +7,15 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardAction,
+} from "@/components/ui/card"
+import { StageThumbnail } from "./stage-thumbnail"
 import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
@@ -132,26 +141,42 @@ export function StageList() {
           )}
         </Empty>
       )}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {visible?.map((stage) => (
           <Link
             key={stage.id}
             href={`/planning/${stage.id}`}
-            className="group flex items-center gap-3 rounded-xl border p-5 hover:bg-muted/40 focus-visible:outline-ring"
+            className="group min-w-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <FilesIcon className="size-5 shrink-0 text-muted-foreground" />
-            <div className="min-w-0 flex-1">
-              <h2 className="truncate text-sm font-medium">{stage.name}</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Actualizada{" "}
-                {new Date(stage.updatedAt).toLocaleDateString("es-AR")}
-              </p>
-            </div>
-            {stage.archived ? (
-              <Badge variant="outline">Archivada</Badge>
-            ) : (
-              <ArrowRightIcon className="size-4 text-muted-foreground" />
-            )}
+            <Card
+              size="sm"
+              className="h-full transition-shadow group-hover:ring-foreground/25"
+            >
+              <CardContent>
+                <StageThumbnail
+                  key={`${stage.id}:${stage.updatedAt}`}
+                  stageId={stage.id}
+                />
+              </CardContent>
+              <CardHeader>
+                <CardTitle className="min-w-0">
+                  <h2 className="truncate" title={stage.name}>
+                    {stage.name}
+                  </h2>
+                </CardTitle>
+                <CardDescription>
+                  Actualizada{" "}
+                  {new Date(stage.updatedAt).toLocaleDateString("es-AR")}
+                </CardDescription>
+                <CardAction>
+                  {stage.archived ? (
+                    <Badge variant="outline">Archivada</Badge>
+                  ) : (
+                    <ArrowRightIcon className="size-4 text-muted-foreground" />
+                  )}
+                </CardAction>
+              </CardHeader>
+            </Card>
           </Link>
         ))}
       </div>

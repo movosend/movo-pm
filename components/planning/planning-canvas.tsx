@@ -14,18 +14,11 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { layoutGraph } from "@/lib/graph/layout"
+import { planningLayout, PLANNING_CARD as CARD } from "@/lib/planning/layout"
 import { statusColorVar } from "@/components/graph/status-color"
 import type { Snapshot } from "@/lib/schema/snapshot"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-
-const CARD = {
-  nodeWidth: 244,
-  nodeHeight: 88,
-  columnWidth: 320,
-  rowHeight: 118,
-}
 
 export function PlanningCanvas({
   snapshot,
@@ -79,16 +72,7 @@ export function PlanningCanvas({
   const drag = useRef<{ x: number; y: number } | null>(null)
   const lastLayout = useRef<Record<string, { x: number; y: number }>>({})
   const lastAnchor = useRef<string | null>(null)
-  const layout = useMemo(() => {
-    const result = layoutGraph(snapshot, { showOutside: true, metrics: CARD })
-    result.orphans.forEach((id, index) => {
-      result.pos[id] = {
-        x: 46 + (index % 3) * CARD.columnWidth,
-        y: result.height + 30 + Math.floor(index / 3) * CARD.rowHeight,
-      }
-    })
-    return result
-  }, [snapshot])
+  const layout = useMemo(() => planningLayout(snapshot), [snapshot])
   // Keep the selected/expanded card at the same screen position when dagre reflows.
   useEffect(() => {
     const anchor = lastAnchor.current
