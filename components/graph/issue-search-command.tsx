@@ -15,21 +15,26 @@ import {
   CommandDialog,
   CommandEmpty,
   CommandInput,
+  CommandGroup,
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
 import { statusColorVar, statusTextVar } from "@/components/graph/status-color"
 import { patchIssue } from "@/lib/api/patch-issue"
-import type { Cycle, SearchIssue } from "@/lib/schema/snapshot"
+import type { Cycle, Node, SearchIssue } from "@/lib/schema/snapshot"
 
 export function IssueSearchCommand({
   open,
   onOpenChange,
   cycle,
+  nodes,
+  onSelectIssue,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   cycle: Cycle
+  nodes: Node[]
+  onSelectIssue: (id: string) => void
 }) {
   const router = useRouter()
   const [query, setQuery] = useState("")
@@ -51,13 +56,43 @@ export function IssueSearchCommand({
   }
 
   const term = query.trim()
-  const visibleResults = term.length >= 2 ? results : []
+  const localResults: SearchIssue[] =
+    term.length >= 2
+      ? nodes
+          .filter((node) =>
+            `${node.id} ${node.title}`
+              .toLowerCase()
+              .includes(term.toLowerCase())
+          )
+          .map((node) => ({
+            ...node,
+            url: `https://linear.app/${cycle.workspace}/issue/${node.id}`,
+            cycleId: node.inCycle ? cycle.id : null,
+          }))
+      : []
+  const localIds = new Set(localResults.map((issue) => issue.id))
+  const visibleResults =
+    term.length >= 2
+      ? [...localResults, ...results.filter((issue) => !localIds.has(issue.id))]
+      : []
+
+  function handleSelect(issue: SearchIssue) {
+    if (nodes.some((node) => node.id === issue.id && node.inCycle)) {
+      handleOpenChange(false)
+      onSelectIssue(issue.id)
+    } else {
+      setSelected(issue)
+    }
+  }
 
   useEffect(() => {
     if (!open || selected || term.length < 2) return
 
-    setLoading(true)
+    let canceled = false
     const timer = setTimeout(() => {
+      setLoading(true)
+      setError(null)
+      setResults([])
       abortRef.current?.abort()
       const controller = new AbortController()
       abortRef.current = controller
@@ -65,17 +100,28 @@ export function IssueSearchCommand({
       fetch(`/api/issues/search?q=${encodeURIComponent(term)}`, {
         signal: controller.signal,
       })
-        .then((res) => res.json())
-        .then((body) => setResults(body.results ?? []))
+        .then((res) => {
+          if (!res.ok) throw new Error("search failed")
+          return res.json()
+        })
+        .then((body) => {
+          if (!canceled) setResults(body.results ?? [])
+        })
         .catch((err) => {
-          if (err.name !== "AbortError") {
+          if (!canceled && err.name !== "AbortError") {
             setError("No se pudo buscar en Linear.")
           }
         })
-        .finally(() => setLoading(false))
+        .finally(() => {
+          if (!canceled) setLoading(false)
+        })
     }, 250)
 
-    return () => clearTimeout(timer)
+    return () => {
+      canceled = true
+      clearTimeout(timer)
+      abortRef.current?.abort()
+    }
   }, [term, selected, open])
 
   function handleAdd(issue: SearchIssue) {
@@ -95,7 +141,7 @@ export function IssueSearchCommand({
       open={open}
       onOpenChange={handleOpenChange}
       title="Buscar issues"
-      description="Buscá por título o código para agregar una issue del backlog a este ciclo."
+      description="Buscá por título o código para ver el detalle de una issue o agregarla al ciclo."
     >
       <Command shouldFilter={false}>
         {selected ? (
@@ -190,12 +236,12 @@ export function IssueSearchCommand({
               {!loading && term.length >= 2 && visibleResults.length === 0 && (
                 <CommandEmpty>Sin resultados en Linear.</CommandEmpty>
               )}
-              {!loading &&
-                visibleResults.map((issue) => (
+              <CommandGroup>
+                {visibleResults.map((issue) => (
                   <CommandItem
                     key={issue.id}
                     value={issue.id}
-                    onSelect={() => setSelected(issue)}
+                    onSelect={() => handleSelect(issue)}
                     className="flex items-center gap-2.5"
                   >
                     <span
@@ -213,6 +259,7 @@ export function IssueSearchCommand({
                     </span>
                   </CommandItem>
                 ))}
+              </CommandGroup>
             </CommandList>
             {error && (
               <p className="px-3 pb-2 text-xs text-destructive">{error}</p>

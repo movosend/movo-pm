@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { PanelRightCloseIcon, PanelRightOpenIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 import { CycleHeader } from "@/components/graph/cycle-header"
 import { EmptyCycleError } from "@/components/graph/empty-cycle-error"
@@ -38,7 +40,9 @@ function toggleKey(prev: ToggleKey[], key: ToggleKey): ToggleKey[] {
 
 function isTypingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false
-  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"))
+  return Boolean(
+    target.closest("input, textarea, select, [contenteditable='true']")
+  )
 }
 
 type Point = { x: number; y: number }
@@ -80,11 +84,12 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
-  const [active, setActive] = useState<ToggleKey[]>(["showOutside"])
+  const [active, setActive] = useState<ToggleKey[]>([])
   const [view, setView] = useState({ k: 1, x: 0, y: 0 })
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null)
   const [animating, setAnimating] = useState(false)
   const [orphansMounted, setOrphansMounted] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
   const [userPaletteOpen, setUserPaletteOpen] = useState(false)
   const [highlightedUserId, setHighlightedUserId] = useState<string | null>(
@@ -138,7 +143,9 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
   const orphanCols = Math.max(1, layout.cols.length)
   const orphanRows = Math.ceil(orphans.length / orphanCols)
   const orphanAreaHeight = orphans.length
-    ? ORPHAN_TOP_GAP + ORPHAN_LABEL_HEIGHT + orphanRows * LAYOUT_METRICS.rowHeight
+    ? ORPHAN_TOP_GAP +
+      ORPHAN_LABEL_HEIGHT +
+      orphanRows * LAYOUT_METRICS.rowHeight
     : 0
   const orphanStartY = layout.height + ORPHAN_TOP_GAP
   const orphanPos = useMemo(() => {
@@ -222,16 +229,21 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
       if (!orphans.length) return
       prevKRef.current = view.k
       clearTimeout(orphanUnmountRef.current)
-      setOrphansMounted(true)
-      const frame = requestAnimationFrame(() => animateTo(fitToOrphans()))
+      const frame = requestAnimationFrame(() => {
+        setOrphansMounted(true)
+        animateTo(fitToOrphans())
+      })
       return () => cancelAnimationFrame(frame)
     }
     if (orphansMounted) {
-      animateTo(centeredView(prevKRef.current))
-      orphanUnmountRef.current = setTimeout(
-        () => setOrphansMounted(false),
-        480
+      const frame = requestAnimationFrame(() =>
+        animateTo(centeredView(prevKRef.current))
       )
+      orphanUnmountRef.current = setTimeout(() => setOrphansMounted(false), 480)
+      return () => {
+        cancelAnimationFrame(frame)
+        clearTimeout(orphanUnmountRef.current)
+      }
     }
     return () => clearTimeout(orphanUnmountRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -386,7 +398,7 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
       <div className="flex min-h-0 flex-1">
         <div
           ref={canvasRef}
-          className="relative min-w-0 flex-1 cursor-grab overflow-hidden bg-[radial-gradient(circle,color-mix(in_oklch,var(--foreground)_14%,transparent)_1px,transparent_1px)] bg-position-[0_0] bg-size-[20px_20px] active:cursor-grabbing"
+          className="relative min-w-0 flex-1 cursor-grab overflow-hidden bg-[radial-gradient(circle,color-mix(in_oklch,var(--foreground)_14%,transparent)_1px,transparent_1px)] bg-size-[20px_20px] bg-position-[0_0] active:cursor-grabbing"
           onMouseDown={handleCanvasMouseDown}
           onMouseMove={handleCanvasMouseMove}
           onMouseUp={() => setDrag(null)}
@@ -494,14 +506,15 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                     fill="none"
                     stroke={stroke}
                     strokeWidth={on ? 1.8 : openEdge && !off ? 1.3 : 1}
-                    opacity={
-                      highlightedNodeIds ? 0.25 : off ? 0.6 : 1
-                    }
+                    opacity={highlightedNodeIds ? 0.25 : off ? 0.6 : 1}
                     markerEnd="url(#edge-arrow)"
                   />
                 ))}
 
-              {Object.entries(layout.pos).map(([id, p]) => {
+              {Object.entries({
+                ...layout.pos,
+                ...(showOrphans ? orphanPos : {}),
+              }).map(([id, p]) => {
                 const n = nodesById.get(id)
                 if (!n) return null
                 const on = !lit || lit.has(id)
@@ -529,9 +542,22 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                           : 0.16
                     }
                     className="cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${n.id}: ${n.title}`}
+                    aria-pressed={isSelected}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        setSelected(selected === id ? null : id)
+                      }
+                    }}
                     onMouseEnter={() => setHovered(id)}
                     onMouseLeave={() => setHovered(null)}
-                    onClick={() => setSelected(selected === id ? null : id)}
+                    onClick={() => {
+                      setSelected(selected === id ? null : id)
+                      setPanelOpen(true)
+                    }}
                   >
                     {isHovered && (
                       <rect
@@ -543,7 +569,7 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                         fill="none"
                         stroke="var(--highlight)"
                         strokeWidth={2.5}
-                        className="pointer-events-none animate-node-highlight"
+                        className="animate-node-highlight pointer-events-none"
                       />
                     )}
                     <rect
@@ -667,61 +693,6 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                   >
                     Sin dependencias declaradas · {orphans.length} issues
                   </text>
-                  {orphans.map((n) => {
-                    const p = orphanPos[n.id]
-                    if (!p) return null
-                    const userMatch = highlightedNodeIds?.has(n.id) ?? false
-                    return (
-                      <g
-                        key={n.id}
-                        transform={`translate(${p.x},${p.y})`}
-                        opacity={
-                          highlightedNodeIds ? (userMatch ? 1 : 0.14) : 0.85
-                        }
-                      >
-                        <rect
-                          width={NW}
-                          height={NH}
-                          rx={6}
-                          fill="var(--card)"
-                          stroke={
-                            userMatch ? "var(--primary)" : "var(--border)"
-                          }
-                          strokeWidth={userMatch ? 1.6 : 1}
-                          strokeDasharray="3 3"
-                        />
-                        <rect
-                          width={4}
-                          height={NH}
-                          fill={statusColorVar(n)}
-                          clipPath="url(#node-clip)"
-                        />
-                        <text
-                          x={16}
-                          y={20}
-                          className="fill-muted-foreground text-[10.5px] font-semibold"
-                        >
-                          {n.id}
-                        </text>
-                        <text
-                          x={16}
-                          y={38}
-                          className="fill-foreground text-[12.5px] font-medium"
-                        >
-                          {n.short.length > 27
-                            ? `${n.short.slice(0, 26)}…`
-                            : n.short}
-                        </text>
-                        <text
-                          x={16}
-                          y={53}
-                          className="fill-muted-foreground text-[10px]"
-                        >
-                          {n.who ?? "sin asignar"}
-                        </text>
-                      </g>
-                    )
-                  })}
                 </g>
               )}
 
@@ -742,7 +713,9 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                       width={44}
                       height={20}
                       rx={6}
-                      fill={isError ? "var(--status-stop)" : "var(--foreground)"}
+                      fill={
+                        isError ? "var(--status-stop)" : "var(--foreground)"
+                      }
                     />
                     <text
                       x={0}
@@ -760,30 +733,56 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
           </svg>
           <StatusLegend />
         </div>
-        <aside className="min-h-0 w-[356px] shrink-0 overflow-hidden border-l">
-          <SidePanel
-            selected={selectedNode}
-            nodesById={nodesById}
-            graph={graph}
-            chain={chain}
-            bottlenecksList={bottlenecksList}
-            stranded={strandedList}
-            openBlocksList={openBlocksList}
-            analysis={snapshot.analysis}
-            workspace={snapshot.cycle.workspace}
-            cycle={snapshot.cycle}
-            states={snapshot.states ?? []}
-            members={snapshot.members ?? []}
-            onSelect={setSelected}
-            onBack={() => setSelected(null)}
-            onHover={setHovered}
-          />
-        </aside>
+        <div className="shrink-0 border-l p-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={
+              panelOpen
+                ? "Colapsar panel de resumen"
+                : "Expandir panel de resumen"
+            }
+            aria-expanded={panelOpen}
+            aria-controls="cycle-side-panel"
+            onClick={() => setPanelOpen((open) => !open)}
+          >
+            {panelOpen ? <PanelRightCloseIcon /> : <PanelRightOpenIcon />}
+          </Button>
+        </div>
+        {panelOpen && (
+          <aside
+            id="cycle-side-panel"
+            className="min-h-0 w-[356px] shrink-0 overflow-hidden border-l"
+          >
+            <SidePanel
+              selected={selectedNode}
+              nodesById={nodesById}
+              graph={graph}
+              chain={chain}
+              bottlenecksList={bottlenecksList}
+              stranded={strandedList}
+              openBlocksList={openBlocksList}
+              analysis={snapshot.analysis}
+              workspace={snapshot.cycle.workspace}
+              cycle={snapshot.cycle}
+              states={snapshot.states ?? []}
+              members={snapshot.members ?? []}
+              onSelect={setSelected}
+              onBack={() => setSelected(null)}
+              onHover={setHovered}
+            />
+          </aside>
+        )}
       </div>
       <IssueSearchCommand
         open={searchOpen}
         onOpenChange={setSearchOpen}
         cycle={snapshot.cycle}
+        nodes={snapshot.nodes}
+        onSelectIssue={(id) => {
+          setSelected(id)
+          setPanelOpen(true)
+        }}
       />
       <UserHighlightCommand
         open={userPaletteOpen}
