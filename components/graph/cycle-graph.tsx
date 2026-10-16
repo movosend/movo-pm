@@ -1,7 +1,27 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { useGraphLocation } from "@/hooks/use-graph-location"
+import { FilterBar } from "@/components/graph/filter-bar"
+import {
+  IssueUpdatesProvider,
+  useIssueUpdates,
+} from "@/components/graph/issue-updates"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet"
+import {
+  emptyFilters,
+  hasFilters,
+  matchesFilters,
+  type Condition,
+  type Filters,
+  type Visibility,
+} from "@/lib/graph/view-state"
 import { PanelRightCloseIcon, PanelRightOpenIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -14,7 +34,7 @@ import { statusColorVar } from "@/components/graph/status-color"
 import { StatusLegend } from "@/components/graph/status-legend"
 import { ToggleBar, type ToggleKey } from "@/components/graph/toggle-bar"
 import { usePollingSync } from "@/hooks/use-polling-sync"
-import { patchIssue } from "@/lib/api/patch-issue"
+
 import { buildGraph } from "@/lib/graph/build"
 import { detectCycles } from "@/lib/graph/cycles"
 import { LAYOUT_METRICS, layoutGraph } from "@/lib/graph/layout"
@@ -81,14 +101,49 @@ function roundedPath(points: Point[], radius = 10) {
 }
 
 export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
+  return (
+    <IssueUpdatesProvider>
+      <CycleGraphView snapshot={snapshot} />
+    </IssueUpdatesProvider>
+  )
+}
+function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
   const canvasRef = useRef<HTMLDivElement>(null)
-  const [selected, setSelected] = useState<string | null>(null)
+  const { state: location, update: updateLocation } = useGraphLocation(
+    snapshot.cycle.id
+  )
+  const selected = location.selected
+  const active = location.active
+  const filters = location.filters
+  const filtering = hasFilters(filters)
+  const { mutate } = useIssueUpdates()
+  const [mobilePanelOpen, setMobilePanelOpen] = useState<boolean | null>(null)
+  const [group, setGroup] = useState<Condition | null>(null)
+  const [panelWidth, setPanelWidth] = useState(440)
+  const [containerWidth, setContainerWidth] = useState(1200)
+  const [shareMessage, setShareMessage] = useState<string | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const mobile = containerWidth < 768
+  function setSelected(id: string | null) {
+    updateLocation({ selected: id })
+    if (id) {
+      setPanelOpen(true)
+      setMobilePanelOpen(true)
+    }
+  }
+  function setActive(
+    next: Visibility[] | ((prev: Visibility[]) => Visibility[])
+  ) {
+    updateLocation({ active: typeof next === "function" ? next(active) : next })
+  }
+  function setFilters(next: Filters) {
+    updateLocation({ filters: next })
+    setGroup(null)
+  }
   const [hovered, setHovered] = useState<string | null>(null)
-  const [active, setActive] = useState<ToggleKey[]>([])
   const [view, setView] = useState({ k: 1, x: 0, y: 0 })
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null)
   const [animating, setAnimating] = useState(false)
-  const [orphansMounted, setOrphansMounted] = useState(false)
   const [panelOpen, setPanelOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
   const [userPaletteOpen, setUserPaletteOpen] = useState(false)
@@ -98,13 +153,7 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
   const [estimating, setEstimating] = useState<string | null>(null)
   const [estimateBuffer, setEstimateBuffer] = useState("")
   const [errorNode, setErrorNode] = useState<string | null>(null)
-  const router = useRouter()
-  const [, startEstimateTransition] = useTransition()
-  const prevKRef = useRef(view.k)
   const animTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined
-  )
-  const orphanUnmountRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined
   )
   const estimateTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -116,7 +165,6 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
 
   const showOutside = active.includes("showOutside")
   const showParents = active.includes("showParents")
-  const showOrphans = active.includes("showOrphans")
 
   const nodesById = useMemo(
     () => new Map(snapshot.nodes.map((n) => [n.id, n])),
@@ -124,9 +172,41 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
   )
   const graph = useMemo(() => buildGraph(snapshot), [snapshot])
   const cycles = useMemo(() => detectCycles(graph), [graph])
-  const layout = useMemo(
-    () => layoutGraph(snapshot, { showOutside }),
-    [snapshot, showOutside]
+  const layout = useMemo(() => {
+    const selectedNode = selected ? nodesById.get(selected) : null
+    if (!selectedNode || selectedNode.inCycle || showOutside)
+      return layoutGraph(snapshot, { showOutside })
+    const revealed = new Set([
+      selectedNode.id,
+      ...walk(selectedNode.id, graph.preds),
+      ...walk(selectedNode.id, graph.succs),
+    ])
+    return layoutGraph(
+      {
+        ...snapshot,
+        nodes: snapshot.nodes.map((node) =>
+          revealed.has(node.id) ? { ...node, inCycle: true } : node
+        ),
+      },
+      { showOutside: false }
+    )
+  }, [snapshot, showOutside, selected, nodesById, graph])
+  const showOrphans =
+    active.includes("showOrphans") ||
+    filtering ||
+    Boolean(selected && layout.orphans.includes(selected))
+  const matchingIds = useMemo(
+    () =>
+      new Set(
+        snapshot.nodes
+          .filter(
+            (node) =>
+              (node.inCycle || showOutside) &&
+              matchesFilters(node, filters, graph)
+          )
+          .map((node) => node.id)
+      ),
+    [snapshot, showOutside, filters, graph]
   )
 
   const chain = useMemo(() => longestChain(graph), [graph])
@@ -171,6 +251,11 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
     ])
   }, [activeFocus, layout])
 
+  const visibleOrphanPos = Object.fromEntries(
+    Object.entries(orphanPos).filter(
+      ([id]) => active.includes("showOrphans") || filtering || selected === id
+    )
+  )
   const selectedNode = selected ? (nodesById.get(selected) ?? null) : null
   const highlightedMember = highlightedUserId
     ? (snapshot.members ?? []).find((m) => m.id === highlightedUserId)
@@ -201,53 +286,74 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
     animTimeoutRef.current = setTimeout(() => setAnimating(false), 520)
   }
 
-  function fitToOrphans() {
-    const height = canvasRef.current?.clientHeight ?? 0
-    const totalHeight = layout.height + orphanAreaHeight
-    const available = height - 48
-    const fitK = available > 0 ? available / totalHeight : view.k
-    const k = Math.min(view.k, Math.max(0.45, fitK))
-    return centeredView(k, orphanAreaHeight)
-  }
-
-  useEffect(() => {
-    const el = canvasRef.current
-    if (!el) return
-    let centered = false
-    const observer = new ResizeObserver(() => {
-      if (centered) return
-      centered = true
-      setView((v) => centeredView(v.k))
+  function focusSelected() {
+    if (!selected) return
+    const point = layout.pos[selected] ?? orphanPos[selected]
+    const canvas = canvasRef.current
+    if (!point || !canvas) return
+    const k = Math.min(1.8, Math.max(0.85, view.k))
+    animateTo({
+      k,
+      x: canvas.clientWidth / 2 - (point.x + NW / 2) * k,
+      y: canvas.clientHeight / 2 - (point.y + NH / 2) * k,
     })
-    observer.observe(el)
-    return () => observer.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    if (showOrphans) {
-      if (!orphans.length) return
-      prevKRef.current = view.k
-      clearTimeout(orphanUnmountRef.current)
-      const frame = requestAnimationFrame(() => {
-        setOrphansMounted(true)
-        animateTo(fitToOrphans())
-      })
-      return () => cancelAnimationFrame(frame)
-    }
-    if (orphansMounted) {
-      const frame = requestAnimationFrame(() =>
-        animateTo(centeredView(prevKRef.current))
+  }
+  async function share(issue: boolean) {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      params.set("cycle", snapshot.cycle.id)
+      if (!issue) params.delete("issue")
+      const url = new URL(window.location.href)
+      url.search = params.toString()
+      await navigator.clipboard.writeText(url.toString())
+      setShareMessage("Enlace copiado.")
+    } catch {
+      setShareMessage(
+        "No se pudo copiar el enlace. Podés copiar la dirección del navegador."
       )
-      orphanUnmountRef.current = setTimeout(() => setOrphansMounted(false), 480)
-      return () => {
-        cancelAnimationFrame(frame)
-        clearTimeout(orphanUnmountRef.current)
-      }
     }
-    return () => clearTimeout(orphanUnmountRef.current)
+  }
+  function selectGroup(next: Condition | null) {
+    setGroup(next)
+    if (next)
+      updateLocation({
+        selected: null,
+        filters: { ...emptyFilters(), conditions: [next] },
+      })
+  }
+  useEffect(() => {
+    if (!selected) return
+    const frame = requestAnimationFrame(() => {
+      setPanelOpen(true)
+      setMobilePanelOpen(true)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [selected])
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const observer = new ResizeObserver(() =>
+      setContainerWidth(container.clientWidth)
+    )
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    function frameView() {
+      if (selected) focusSelected()
+      else animateTo(centeredView(view.k, showOrphans ? orphanAreaHeight : 0))
+    }
+    const frame = requestAnimationFrame(frameView)
+    const observer = new ResizeObserver(frameView)
+    observer.observe(canvas)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showOrphans, orphans.length])
+  }, [selected, layout, panelOpen, mobile, showOrphans])
 
   function cancelEstimate() {
     clearTimeout(estimateTimeoutRef.current)
@@ -261,13 +367,11 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
     setEstimateBuffer("")
     if (!buffer.length) return
     const estimate = Number(buffer)
-    patchIssue(id, { estimate })
-      .then(() => startEstimateTransition(() => router.refresh()))
-      .catch(() => {
-        clearTimeout(errorNodeTimeoutRef.current)
-        setErrorNode(id)
-        errorNodeTimeoutRef.current = setTimeout(() => setErrorNode(null), 1600)
-      })
+    mutate(id, { estimate }).catch(() => {
+      clearTimeout(errorNodeTimeoutRef.current)
+      setErrorNode(id)
+      errorNodeTimeoutRef.current = setTimeout(() => setErrorNode(null), 1600)
+    })
   }
 
   useEffect(() => {
@@ -302,6 +406,7 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
         cancelEstimate()
       }
 
+      if (searchOpen || userPaletteOpen || isTypingTarget(e.target)) return
       if (e.key === "Escape") {
         if (selected) {
           setSelected(null)
@@ -379,8 +484,37 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
     return () => el.removeEventListener("wheel", onWheel)
   }, [])
 
+  const panel = (
+    <SidePanel
+      selected={selectedNode}
+      nodesById={nodesById}
+      graph={graph}
+      chain={chain}
+      bottlenecksList={bottlenecksList}
+      stranded={strandedList}
+      openBlocksList={openBlocksList}
+      analysis={snapshot.analysis}
+      workspace={snapshot.cycle.workspace}
+      cycle={snapshot.cycle}
+      states={snapshot.states ?? []}
+      members={snapshot.members ?? []}
+      onSelect={setSelected}
+      onBack={() => {
+        setSelected(null)
+        setGroup(null)
+      }}
+      onHover={setHovered}
+      onFocus={focusSelected}
+      onShareIssue={() => {
+        void share(true)
+      }}
+      group={group}
+      onGroup={selectGroup}
+    />
+  )
+
   return (
-    <div className="flex h-full flex-col">
+    <div ref={containerRef} className="flex h-full flex-col">
       <CycleHeader cycle={snapshot.cycle} nodes={snapshot.nodes} />
       <ToggleBar
         active={active}
@@ -394,6 +528,66 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
         highlightedUserName={highlightedMember?.name}
         onClearHighlight={() => setHighlightedUserId(null)}
       />
+      <FilterBar
+        filters={filters}
+        onChange={setFilters}
+        members={snapshot.members ?? []}
+        states={snapshot.states ?? []}
+        count={matchingIds.size}
+        total={
+          snapshot.nodes.filter((node) => node.inCycle || showOutside).length
+        }
+        onShare={() => {
+          void share(false)
+        }}
+      />
+      {location.cycle && location.cycle !== snapshot.cycle.id && (
+        <Alert>
+          <AlertDescription>
+            El ciclo del enlace cambió. Estás viendo los datos del ciclo actual.
+          </AlertDescription>
+        </Alert>
+      )}
+      {selected && !selectedNode && (
+        <Alert>
+          <AlertDescription>
+            La issue {selected} no está disponible en los datos actuales.{" "}
+            <Button variant="ghost" size="xs" onClick={() => setSelected(null)}>
+              Cerrar
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      {selectedNode &&
+        ((!selectedNode.inCycle && !showOutside) ||
+          (filtering && !matchingIds.has(selectedNode.id)) ||
+          (!active.includes("showOrphans") &&
+            Boolean(orphanPos[selectedNode.id]))) && (
+          <Alert>
+            <AlertDescription>
+              Mostrando issue seleccionada fuera de los filtros.
+            </AlertDescription>
+          </Alert>
+        )}
+      {filtering && matchingIds.size === 0 && (
+        <Alert>
+          <AlertDescription>
+            No hay issues que coincidan.{" "}
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => setFilters(emptyFilters())}
+            >
+              Limpiar filtros
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      {shareMessage && (
+        <p role="status" className="px-4 py-1 text-xs text-muted-foreground">
+          {shareMessage}
+        </p>
+      )}
       <EmptyCycleError cycles={cycles} />
       <div className="flex min-h-0 flex-1">
         <div
@@ -484,7 +678,9 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                     !highlightedNodeIds && lit && lit.has(a) && lit.has(b)
                   const off = highlightedNodeIds ? true : lit && !on
                   const blocker = nodesById.get(a)
-                  const openEdge = blocker?.type !== "completed"
+                  const openEdge =
+                    blocker?.type !== "completed" &&
+                    blocker?.type !== "canceled"
                   const stroke = on
                     ? "var(--foreground)"
                     : off
@@ -513,7 +709,7 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
 
               {Object.entries({
                 ...layout.pos,
-                ...(showOrphans ? orphanPos : {}),
+                ...(showOrphans ? visibleOrphanPos : {}),
               }).map(([id, p]) => {
                 const n = nodesById.get(id)
                 if (!n) return null
@@ -521,11 +717,19 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                 const isSelected = selected === id
                 const isHovered = hovered === id
                 const userMatch = highlightedNodeIds?.has(id) ?? false
-                const blocked = (layout.preds[id] ?? []).some(
-                  (x) => nodesById.get(x)?.type !== "completed"
-                )
+                const blocked = (layout.preds[id] ?? []).some((x) => {
+                  const node = nodesById.get(x)
+                  return (
+                    node &&
+                    node.type !== "completed" &&
+                    node.type !== "canceled"
+                  )
+                })
                 const downCount = (layout.succs[id] ?? []).length
-                const openBlocker = downCount > 0 && n.type !== "completed"
+                const openBlocker =
+                  downCount > 0 &&
+                  n.type !== "completed" &&
+                  n.type !== "canceled"
 
                 return (
                   <g
@@ -533,13 +737,17 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                     data-node-id={id}
                     transform={`translate(${p.x},${p.y})`}
                     opacity={
-                      highlightedNodeIds
-                        ? userMatch
-                          ? 1
-                          : 0.14
-                        : on
-                          ? 1
-                          : 0.16
+                      isSelected
+                        ? 1
+                        : filtering && !matchingIds.has(id)
+                          ? 0.14
+                          : highlightedNodeIds
+                            ? userMatch
+                              ? 1
+                              : 0.14
+                            : on
+                              ? 1
+                              : 0.16
                     }
                     className="cursor-pointer"
                     role="button"
@@ -667,7 +875,7 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
                 )
               })}
 
-              {orphansMounted && orphans.length > 0 && (
+              {showOrphans && orphans.length > 0 && (
                 <g
                   style={{
                     opacity: showOrphans ? 1 : 0,
@@ -738,40 +946,106 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
             variant="ghost"
             size="icon-sm"
             aria-label={
-              panelOpen
+              (mobile ? (mobilePanelOpen ?? Boolean(selected)) : panelOpen)
                 ? "Colapsar panel de resumen"
                 : "Expandir panel de resumen"
             }
-            aria-expanded={panelOpen}
-            aria-controls="cycle-side-panel"
-            onClick={() => setPanelOpen((open) => !open)}
+            aria-expanded={
+              mobile ? (mobilePanelOpen ?? Boolean(selected)) : panelOpen
+            }
+            aria-controls={
+              mobile ? "mobile-cycle-side-panel" : "cycle-side-panel"
+            }
+            onClick={() => {
+              if (mobile)
+                setMobilePanelOpen(!(mobilePanelOpen ?? Boolean(selected)))
+              else setPanelOpen((open) => !open)
+            }}
           >
-            {panelOpen ? <PanelRightCloseIcon /> : <PanelRightOpenIcon />}
+            {(mobile ? (mobilePanelOpen ?? Boolean(selected)) : panelOpen) ? (
+              <PanelRightCloseIcon />
+            ) : (
+              <PanelRightOpenIcon />
+            )}
           </Button>
         </div>
-        {panelOpen && (
-          <aside
-            id="cycle-side-panel"
-            className="min-h-0 w-[356px] shrink-0 overflow-hidden border-l"
-          >
-            <SidePanel
-              selected={selectedNode}
-              nodesById={nodesById}
-              graph={graph}
-              chain={chain}
-              bottlenecksList={bottlenecksList}
-              stranded={strandedList}
-              openBlocksList={openBlocksList}
-              analysis={snapshot.analysis}
-              workspace={snapshot.cycle.workspace}
-              cycle={snapshot.cycle}
-              states={snapshot.states ?? []}
-              members={snapshot.members ?? []}
-              onSelect={setSelected}
-              onBack={() => setSelected(null)}
-              onHover={setHovered}
+        {panelOpen && !mobile && (
+          <>
+            <div
+              role="separator"
+              aria-label="Ancho del panel"
+              aria-orientation="vertical"
+              tabIndex={0}
+              aria-valuemin={356}
+              aria-valuemax={Math.floor(containerWidth * 0.6)}
+              aria-valuenow={Math.min(panelWidth, containerWidth * 0.6)}
+              className="w-1.5 shrink-0 cursor-col-resize touch-none bg-border/40 hover:bg-primary/30 focus-visible:bg-primary/30"
+              onKeyDown={(event) => {
+                event.stopPropagation()
+                if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                  event.preventDefault()
+                  setPanelWidth((width) =>
+                    Math.min(
+                      containerWidth * 0.6,
+                      Math.max(
+                        356,
+                        width + (event.key === "ArrowLeft" ? 24 : -24)
+                      )
+                    )
+                  )
+                }
+              }}
+              onPointerDown={(event) => {
+                event.currentTarget.setPointerCapture(event.pointerId)
+              }}
+              onPointerMove={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  const right =
+                    containerRef.current?.getBoundingClientRect().right ?? 0
+                  setPanelWidth(
+                    Math.min(
+                      containerWidth * 0.6,
+                      Math.max(356, right - event.clientX)
+                    )
+                  )
+                }
+              }}
+              onPointerUp={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId))
+                  event.currentTarget.releasePointerCapture(event.pointerId)
+              }}
             />
-          </aside>
+            <aside
+              id="cycle-side-panel"
+              style={{ width: Math.min(panelWidth, containerWidth * 0.6) }}
+              className="min-h-0 shrink-0 overflow-hidden border-l"
+            >
+              {panel}
+            </aside>
+          </>
+        )}
+        {mobile && (
+          <Sheet
+            open={mobilePanelOpen ?? Boolean(selected)}
+            onOpenChange={setMobilePanelOpen}
+          >
+            <SheetContent
+              id="mobile-cycle-side-panel"
+              className="w-full sm:max-w-none"
+              aria-describedby="mobile-panel-description"
+            >
+              <SheetTitle className="sr-only">
+                {selectedNode ? selectedNode.title : "Acciones del ciclo"}
+              </SheetTitle>
+              <SheetDescription
+                id="mobile-panel-description"
+                className="sr-only"
+              >
+                Detalle de issues y acciones del ciclo.
+              </SheetDescription>
+              <div className="min-h-0 flex-1 pt-9">{panel}</div>
+            </SheetContent>
+          </Sheet>
         )}
       </div>
       <IssueSearchCommand
@@ -779,10 +1053,7 @@ export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
         onOpenChange={setSearchOpen}
         cycle={snapshot.cycle}
         nodes={snapshot.nodes}
-        onSelectIssue={(id) => {
-          setSelected(id)
-          setPanelOpen(true)
-        }}
+        onSelectIssue={setSelected}
       />
       <UserHighlightCommand
         open={userPaletteOpen}

@@ -79,6 +79,7 @@ fragment Core on Issue {
   }
 }
 fragment Lite on Issue {
+  description
   identifier
   title
   estimate

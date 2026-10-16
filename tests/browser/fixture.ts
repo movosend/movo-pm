@@ -1,0 +1,90 @@
+import type { Node, Snapshot } from "@/lib/schema/snapshot"
+const node = (id: string, overrides: Partial<Node> = {}): Node => ({
+  id,
+  title: `Issue ${id}`,
+  short: `Issue ${id}`,
+  status: "Todo",
+  type: "unstarted",
+  pts: null,
+  who: null,
+  parent: null,
+  inCycle: true,
+  description: null,
+  assigneeId: null,
+  stateId: "todo",
+  ...overrides,
+})
+export const fixture: Snapshot = {
+  cycle: {
+    id: "cycle-test",
+    number: 5,
+    team: "Movo",
+    name: "Ciclo UX",
+    start: "15 oct",
+    end: "29 oct",
+    taken: "15 oct 2026",
+    live: false,
+    workspace: "movosend",
+  },
+  nodes: [
+    node("MOVO-1", {
+      title: "Implementar transferencias internacionales",
+      short: "Transferencias internacionales",
+      assigneeId: "ana",
+      who: "Ana",
+      pts: 3,
+      description:
+        "## Objetivo\n\nUna **descripción completa** con [documentación](https://example.com).\n\n- Primer paso\n- Segundo paso\n\n```ts\nconst listo = true\n```\n\n| Campo | Valor |\n| --- | --- |\n| Estado | Listo |\n\n<script>alert('unsafe')</script>\n\n[Inseguro](javascript:alert(1))",
+      parent: "MOVO-2",
+    }),
+    node("MOVO-2", {
+      title: "Preparar integración bancaria",
+      short: "Integración bancaria",
+      assigneeId: "bob",
+      who: "Bob",
+      pts: 0,
+    }),
+    node("MOVO-3", {
+      title: "Revisar textos del onboarding",
+      short: "Textos de onboarding",
+    }),
+    node("MOVO-4", {
+      title: "Verificación completada",
+      short: "Verificación completada",
+      type: "completed",
+      stateId: "done",
+      status: "Done",
+      pts: 2,
+    }),
+    node("MOVO-5", {
+      title: "Bloqueante externo",
+      short: "Bloqueante externo",
+      inCycle: false,
+      assigneeId: "bob",
+      who: "Bob",
+      description: "Descripción del bloqueante externo.",
+    }),
+    node("MOVO-6", {
+      title: "Dependencia cancelada",
+      type: "canceled",
+      stateId: "canceled",
+      status: "Canceled",
+    }),
+  ],
+  blocks: [
+    ["MOVO-5", "MOVO-1"],
+    ["MOVO-1", "MOVO-2"],
+    ["MOVO-4", "MOVO-2"],
+  ],
+  states: [
+    { id: "todo", name: "Todo", type: "unstarted" },
+    { id: "doing", name: "In Progress", type: "started" },
+    { id: "done", name: "Done", type: "completed" },
+    { id: "canceled", name: "Canceled", type: "canceled" },
+  ],
+  members: [
+    { id: "ana", name: "Ana" },
+    { id: "bob", name: "Bob" },
+  ],
+  analysis: null,
+}

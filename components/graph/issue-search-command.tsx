@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
+
 import {
   ArrowLeftIcon,
   ExternalLinkIcon,
@@ -20,7 +20,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { statusColorVar, statusTextVar } from "@/components/graph/status-color"
-import { patchIssue } from "@/lib/api/patch-issue"
+import { useIssueUpdates } from "@/components/graph/issue-updates"
 import type { Cycle, Node, SearchIssue } from "@/lib/schema/snapshot"
 
 export function IssueSearchCommand({
@@ -36,7 +36,7 @@ export function IssueSearchCommand({
   nodes: Node[]
   onSelectIssue: (id: string) => void
 }) {
-  const router = useRouter()
+  const { mutate, busy } = useIssueUpdates()
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<SearchIssue[]>([])
   const [loading, setLoading] = useState(false)
@@ -77,7 +77,7 @@ export function IssueSearchCommand({
       : []
 
   function handleSelect(issue: SearchIssue) {
-    if (nodes.some((node) => node.id === issue.id && node.inCycle)) {
+    if (nodes.some((node) => node.id === issue.id)) {
       handleOpenChange(false)
       onSelectIssue(issue.id)
     } else {
@@ -127,9 +127,8 @@ export function IssueSearchCommand({
   function handleAdd(issue: SearchIssue) {
     setError(null)
     setAdding(true)
-    patchIssue(issue.id, { cycleId: cycle.id })
+    mutate(issue.id, { cycleId: cycle.id })
       .then(() => {
-        router.refresh()
         handleOpenChange(false)
       })
       .catch((err) => setError(err.message))
@@ -200,7 +199,7 @@ export function IssueSearchCommand({
                 size="sm"
                 variant="default"
                 onClick={() => handleAdd(selected)}
-                disabled={adding}
+                disabled={adding || busy.has(selected.id)}
                 className="w-full"
               >
                 {adding ? (

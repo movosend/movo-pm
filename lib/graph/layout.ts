@@ -65,12 +65,11 @@ export function layoutGraph(
     preds[b].push(a)
   })
 
-  const nodesById = new Map(snapshot.nodes.map((n) => [n.id, n]))
   const connected = [...visible].filter(
     (id) => preds[id].length || succs[id].length
   )
   const orphans = [...visible].filter(
-    (id) => !preds[id].length && !succs[id].length && nodesById.get(id)?.inCycle
+    (id) => !preds[id].length && !succs[id].length
   )
 
   const pos: Record<string, Point> = {}
@@ -114,16 +113,18 @@ export function layoutGraph(
     connected.forEach((id) =>
       g.setNode(id, { width: nodeWidth, height: nodeHeight })
     )
-    edges.forEach(([a, b]) =>
-      g.setEdge(a, b, { minlen: level[b] - level[a] })
-    )
+    edges.forEach(([a, b]) => g.setEdge(a, b, { minlen: level[b] - level[a] }))
 
     dagre.layout(g)
 
     // dagre positions are node centers; shift everything so the graph
     // starts at (padding, padding), matching the previous grid's origin.
-    const minX = Math.min(...connected.map((id) => g.node(id).x - nodeWidth / 2))
-    const minY = Math.min(...connected.map((id) => g.node(id).y - nodeHeight / 2))
+    const minX = Math.min(
+      ...connected.map((id) => g.node(id).x - nodeWidth / 2)
+    )
+    const minY = Math.min(
+      ...connected.map((id) => g.node(id).y - nodeHeight / 2)
+    )
     const shiftX = padding - minX
     const shiftY = padding - minY
 

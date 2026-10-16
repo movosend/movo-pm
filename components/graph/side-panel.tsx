@@ -1,21 +1,49 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useState, type ReactNode } from "react"
 import {
   ArrowLeftIcon,
   ExternalLinkIcon,
+  FocusIcon,
+  LinkIcon,
   Loader2Icon,
   PlusIcon,
 } from "lucide-react"
-
 import { AnalyzeButton } from "@/components/graph/analyze-button"
+import { IssueDescription } from "@/components/graph/issue-description"
+import { useIssueUpdates } from "@/components/graph/issue-updates"
+import { statusColorVar } from "@/components/graph/status-color"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card"
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
 import type { Graph } from "@/lib/graph/build"
-import { walk } from "@/lib/graph/metrics"
-import type { Bottleneck, StrandedChildren } from "@/lib/graph/metrics"
+import {
+  walk,
+  type Bottleneck,
+  type StrandedChildren,
+} from "@/lib/graph/metrics"
+import {
+  actionGroups,
+  CONDITIONS,
+  pending,
+  type Condition,
+} from "@/lib/graph/view-state"
+import { POINT_SCALE } from "@/lib/graph/points"
 import type {
   Analysis,
   Cycle,
@@ -23,293 +51,124 @@ import type {
   TeamMember,
   TeamState,
 } from "@/lib/schema/snapshot"
-import { statusColorVar, statusTextVar } from "@/components/graph/status-color"
-import { patchIssue } from "@/lib/api/patch-issue"
-import { POINT_SCALE } from "@/lib/graph/points"
-import { cn } from "@/lib/utils"
-
-const SEVERITY_LABEL: Record<Analysis["decisions"][number]["sev"], string> = {
-  alta: "Alta",
-  media: "Media",
-  baja: "Baja",
-}
 
 function Row({
   node,
-  label,
   sub,
   extra,
   onSelect,
 }: {
   node: Node
-  label?: string
   sub: string
-  extra?: React.ReactNode
+  extra?: ReactNode
   onSelect: (id: string) => void
 }) {
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onSelect(node.id)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault()
-          onSelect(node.id)
-        }
-      }}
-      className="-mx-2 flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-muted"
-    >
-      <span
-        className="size-1.5 shrink-0 rounded-full"
-        style={{ background: statusColorVar(node) }}
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs">{label ?? node.short}</span>
-        <span className="block text-[11px] text-muted-foreground">{sub}</span>
-      </span>
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => onSelect(node.id)}
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-md p-2 text-left hover:bg-muted focus-visible:outline-ring"
+      >
+        <span
+          className="size-1.5 shrink-0 rounded-full"
+          style={{ background: statusColorVar(node) }}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-xs">{node.short}</span>
+          <span className="block text-[11px] text-muted-foreground">{sub}</span>
+        </span>
+      </button>
       {extra}
     </div>
   )
 }
-
-function StatusSelect({ node, states }: { node: Node; states: TeamState[] }) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const busy = saving || isPending
-
-  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const stateId = e.target.value
-    if (!stateId || stateId === node.stateId) return
-    setError(null)
-    setSaving(true)
-    patchIssue(node.id, { stateId })
-      .then(() => startTransition(() => router.refresh()))
-      .catch((err) => setError(err.message))
-      .finally(() => setSaving(false))
-  }
-
+function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center gap-1.5">
-        {busy && (
-          <Loader2Icon className="size-3 shrink-0 animate-spin text-muted-foreground" />
-        )}
-        <select
-          value={node.stateId ?? ""}
-          onChange={handleChange}
-          disabled={busy}
-          className="cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 pr-0.5 pl-1.5 text-right text-xs font-semibold outline-none hover:border-border focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-          style={{ color: statusTextVar(node) }}
-        >
-          {states.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      {error && <p className="text-[10.5px] text-destructive">{error}</p>}
-    </div>
+    <section className="flex flex-col gap-2">
+      <h3 className="text-xs font-semibold text-muted-foreground">{label}</h3>
+      <Separator />
+      {children}
+    </section>
   )
 }
-
-function AssigneeSelect({
+function IssueField({
   node,
-  members,
+  field,
+  label,
+  options,
+  value,
 }: {
   node: Node
-  members: TeamMember[]
+  field: "stateId" | "assigneeId" | "estimate"
+  label: string
+  value: string
+  options: { id: string; name: string }[]
 }) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [saving, setSaving] = useState(false)
+  const { mutate, busy } = useIssueUpdates()
   const [error, setError] = useState<string | null>(null)
-  const busy = saving || isPending
-
-  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const assigneeId = e.target.value || null
-    if (assigneeId === node.assigneeId) return
-    setError(null)
-    setSaving(true)
-    patchIssue(node.id, { assigneeId })
-      .then(() => startTransition(() => router.refresh()))
-      .catch((err) => setError(err.message))
-      .finally(() => setSaving(false))
-  }
-
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-1.5">
-        {busy && (
-          <Loader2Icon className="size-3 shrink-0 animate-spin text-muted-foreground" />
+        {busy.has(node.id) && (
+          <Loader2Icon className="size-3 animate-spin" aria-label="Guardando" />
         )}
         <select
-          value={node.assigneeId ?? ""}
-          onChange={handleChange}
-          disabled={busy}
-          className="cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 pr-0.5 pl-1.5 text-right text-xs outline-none hover:border-border focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+          aria-label={`${label} de ${node.id}`}
+          value={value}
+          disabled={busy.has(node.id)}
+          onChange={(event) => {
+            const raw = event.target.value
+            setError(null)
+            const next =
+              field === "estimate"
+                ? raw === ""
+                  ? null
+                  : Number(raw)
+                : raw || null
+            if (field === "stateId" && next === null) return
+            void mutate(node.id, { [field]: next }).catch((error: Error) =>
+              setError(error.message)
+            )
+          }}
+          className="max-w-56 rounded-md border bg-background px-2 py-1 text-xs disabled:opacity-50"
         >
-          <option value="">sin asignar</option>
-          {members.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
+          {options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
             </option>
           ))}
         </select>
       </div>
-      {error && <p className="text-[10.5px] text-destructive">{error}</p>}
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
-
-function PointsSelect({ node }: { node: Node }) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const busy = saving || isPending
-
-  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const raw = e.target.value
-    const estimate = raw === "" ? null : Number(raw)
-    if (estimate === (node.pts ?? null)) return
-    setError(null)
-    setSaving(true)
-    patchIssue(node.id, { estimate })
-      .then(() => startTransition(() => router.refresh()))
-      .catch((err) => setError(err.message))
-      .finally(() => setSaving(false))
-  }
-
-  return (
-    <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center gap-1.5">
-        {busy && (
-          <Loader2Icon className="size-3 shrink-0 animate-spin text-muted-foreground" />
-        )}
-        <select
-          value={node.pts != null ? String(node.pts) : ""}
-          onChange={handleChange}
-          disabled={busy}
-          className="cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 pr-0.5 pl-1.5 text-right text-xs outline-none hover:border-border focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-        >
-          <option value="">sin estimar</option>
-          {POINT_SCALE.map((p) => (
-            <option key={p} value={p}>
-              {p} pt
-            </option>
-          ))}
-        </select>
-      </div>
-      {error && <p className="text-[10.5px] text-destructive">{error}</p>}
-    </div>
-  )
-}
-
 function AddToCycleButton({ node, cycle }: { node: Node; cycle: Cycle }) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-
-  function handleClick() {
-    setError(null)
-    patchIssue(node.id, { cycleId: cycle.id })
-      .then(() => startTransition(() => router.refresh()))
-      .catch((err) => setError(err.message))
-  }
-
-  return (
-    <div className="mb-3.5 flex flex-col gap-1">
-      <Button
-        size="sm"
-        variant="default"
-        onClick={handleClick}
-        disabled={isPending}
-      >
-        <PlusIcon data-icon="inline-start" />
-        Agregar al Ciclo {cycle.number + 1}
-      </Button>
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
-  )
-}
-
-function AddChildToCycleButton({ node, cycle }: { node: Node; cycle: Cycle }) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const busy = saving || isPending
-
-  function handleClick(e: React.MouseEvent) {
-    e.stopPropagation()
-    setError(null)
-    setSaving(true)
-    patchIssue(node.id, { cycleId: cycle.id })
-      .then(() => startTransition(() => router.refresh()))
-      .catch((err) => setError(err.message))
-      .finally(() => setSaving(false))
-  }
-
-  if (error) {
-    return <p className="text-[10.5px] text-destructive">{error}</p>
-  }
-
+  const { mutate, busy } = useIssueUpdates()
   return (
     <Button
       size="sm"
       variant="outline"
-      className="h-6 px-2 text-[11px]"
-      onClick={handleClick}
-      disabled={busy}
+      disabled={busy.has(node.id)}
+      onClick={() => {
+        void mutate(node.id, { cycleId: cycle.id }).catch(() => {})
+      }}
     >
-      {busy ? (
-        <Loader2Icon className="size-3 animate-spin" />
+      {busy.has(node.id) ? (
+        <Loader2Icon data-icon="inline-start" className="animate-spin" />
       ) : (
         <PlusIcon data-icon="inline-start" />
       )}
-      Agregar
+      Agregar al ciclo
     </Button>
   )
 }
-
-function Section({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="mb-6">
-      <div className="mb-2.5 border-b pb-1.5 text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">
-        {label}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-export function SidePanel({
-  selected,
-  nodesById,
-  graph,
-  chain,
-  bottlenecksList,
-  stranded,
-  openBlocksList,
-  analysis,
-  workspace,
-  cycle,
-  states,
-  members,
-  onSelect,
-  onBack,
-  onHover,
-}: {
+type PanelProps = {
   selected: Node | null
   nodesById: Map<string, Node>
   graph: Graph
@@ -325,39 +184,28 @@ export function SidePanel({
   onSelect: (id: string) => void
   onBack: () => void
   onHover: (id: string | null) => void
-}) {
+  onFocus: () => void
+  onShareIssue: () => void
+  group: Condition | null
+  onGroup: (group: Condition | null) => void
+}
+export function SidePanel(props: PanelProps) {
   return (
     <ScrollArea className="h-full">
-      <div className="p-5">
-        {selected ? (
+      <div className="flex flex-col gap-6 p-5">
+        {props.selected ? (
           <DetailView
-            node={selected}
-            nodesById={nodesById}
-            graph={graph}
-            workspace={workspace}
-            cycle={cycle}
-            states={states}
-            members={members}
-            onSelect={onSelect}
-            onBack={onBack}
+            key={props.selected.id}
+            {...props}
+            node={props.selected}
           />
         ) : (
-          <SummaryView
-            nodesById={nodesById}
-            chain={chain}
-            bottlenecksList={bottlenecksList}
-            stranded={stranded}
-            openBlocksList={openBlocksList}
-            analysis={analysis}
-            onSelect={onSelect}
-            onHover={onHover}
-          />
+          <SummaryView {...props} />
         )}
       </div>
     </ScrollArea>
   )
 }
-
 function DetailView({
   node,
   nodesById,
@@ -368,166 +216,223 @@ function DetailView({
   members,
   onSelect,
   onBack,
-}: {
-  node: Node
-  nodesById: Map<string, Node>
-  graph: Graph
-  workspace: string
-  cycle: Cycle
-  states: TeamState[]
-  members: TeamMember[]
-  onSelect: (id: string) => void
-  onBack: () => void
-}) {
+  onFocus,
+  onShareIssue,
+}: PanelProps & { node: Node }) {
   const preds = graph.preds[node.id] ?? []
-  const downstream = [...walk(node.id, graph.succs)]
+  const downstream = [...walk(node.id, graph.succs)].filter(
+    (id) => id !== node.id
+  )
   const children = [...nodesById.values()].filter((n) => n.parent === node.id)
-
+  const parent = node.parent ? nodesById.get(node.parent) : null
+  const noBlockers = !preds.some((id) => {
+    const blocker = nodesById.get(id)
+    return blocker && pending(blocker)
+  })
   return (
     <>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="mb-3.5 -ml-2 text-muted-foreground"
-        onClick={onBack}
-      >
-        <ArrowLeftIcon data-icon="inline-start" />
-        Volver al resumen
-      </Button>
-      <div className="text-[11.5px] font-semibold text-muted-foreground">
-        {node.id}
+      <div className="flex flex-col gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="self-start"
+          onClick={onBack}
+        >
+          <ArrowLeftIcon data-icon="inline-start" />
+          Volver al resumen
+        </Button>
+        <span className="text-xs font-semibold text-muted-foreground">
+          {node.id}
+        </span>
+        <h2 className="text-lg leading-snug font-semibold tracking-tight">
+          {node.title}
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={onFocus}>
+            <FocusIcon data-icon="inline-start" />
+            Enfocar en el grafo
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onShareIssue}>
+            <LinkIcon data-icon="inline-start" />
+            Copiar enlace de issue
+          </Button>
+        </div>
+        {!node.inCycle && <AddToCycleButton node={node} cycle={cycle} />}
       </div>
-      <div className="mb-3.5 text-[15px] leading-snug font-semibold tracking-tight">
-        {node.title}
-      </div>
-
-      {!node.inCycle && <AddToCycleButton node={node} cycle={cycle} />}
-
-      <dl className="flex flex-col text-[12.5px]">
-        <div className="flex items-center justify-between gap-3 border-b py-1.5">
-          <dt className="text-muted-foreground">Estado</dt>
+      <dl className="flex flex-col gap-3 text-xs">
+        <div className="flex items-center justify-between gap-3">
+          <dt>Estado</dt>
           <dd>
-            <StatusSelect node={node} states={states} />
+            <IssueField
+              node={node}
+              label="Estado"
+              field="stateId"
+              value={node.stateId ?? ""}
+              options={[
+                ...(!node.stateId ? [{ id: "", name: node.status }] : []),
+                ...states.map((state) => ({ id: state.id, name: state.name })),
+              ]}
+            />
           </dd>
         </div>
-        <div className="flex items-center justify-between gap-3 border-b py-1.5">
-          <dt className="text-muted-foreground">Responsable</dt>
+        <div className="flex items-center justify-between gap-3">
+          <dt>Responsable</dt>
           <dd>
-            <AssigneeSelect node={node} members={members} />
+            <IssueField
+              node={node}
+              label="Responsable"
+              field="assigneeId"
+              value={node.assigneeId ?? ""}
+              options={[{ id: "", name: "Sin responsable" }, ...members]}
+            />
           </dd>
         </div>
-        <div className="flex items-center justify-between gap-3 border-b py-1.5">
-          <dt className="text-muted-foreground">Puntos</dt>
+        <div className="flex items-center justify-between gap-3">
+          <dt>Puntos</dt>
           <dd>
-            <PointsSelect node={node} />
+            <IssueField
+              node={node}
+              label="Puntos"
+              field="estimate"
+              value={node.pts === null ? "" : String(node.pts)}
+              options={[
+                { id: "", name: "Sin estimar" },
+                ...[
+                  ...new Set([
+                    ...POINT_SCALE,
+                    ...(node.pts === null ? [] : [node.pts]),
+                  ]),
+                ]
+                  .sort((a, b) => a - b)
+                  .map((point) => ({ id: String(point), name: `${point} pt` })),
+              ]}
+            />
           </dd>
         </div>
-        <div className="flex items-center justify-between gap-3 border-b py-1.5">
-          <dt className="text-muted-foreground">En el ciclo</dt>
-          <dd>{node.inCycle ? "sí" : "no · backlog"}</dd>
+        <div className="flex items-center justify-between gap-3">
+          <dt>En el ciclo</dt>
+          <dd>{node.inCycle ? "Sí" : "No"}</dd>
         </div>
-        <div className="flex items-center justify-between gap-3 py-1.5">
-          <dt className="text-muted-foreground">Linear</dt>
+        <div className="flex items-center justify-between gap-3">
+          <dt>Linear</dt>
           <dd>
             <a
               href={`https://linear.app/${workspace}/issue/${node.id}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
             >
-              abrir
+              Abrir en Linear
               <ExternalLinkIcon className="size-3" />
             </a>
           </dd>
         </div>
       </dl>
-
-      <div className="mt-5">
-        {children.length > 0 && (
-          <Section label={`Sub-issues · ${children.length}`}>
-            {children.map((child) => (
+      <Section label="Descripción">
+        <IssueDescription description={node.description} />
+      </Section>
+      {node.parent && (
+        <Section label="Issue padre">
+          {parent ? (
+            <Row
+              node={parent}
+              sub={`${parent.id} · ${parent.status}`}
+              onSelect={onSelect}
+            />
+          ) : (
+            <a
+              className="text-xs text-primary underline"
+              href={`https://linear.app/${workspace}/issue/${node.parent}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {node.parent} · Abrir en Linear
+            </a>
+          )}
+        </Section>
+      )}
+      {children.length > 0 && (
+        <Section label={`Sub-issues · ${children.length}`}>
+          {children.map((child) => (
+            <Row
+              key={child.id}
+              node={child}
+              sub={`${child.id} · ${child.status}`}
+              extra={
+                child.inCycle ? (
+                  <Badge variant="secondary">En ciclo</Badge>
+                ) : (
+                  <AddToCycleButton node={child} cycle={cycle} />
+                )
+              }
+              onSelect={onSelect}
+            />
+          ))}
+        </Section>
+      )}
+      <Section label={`Bloqueado por · ${preds.length}`}>
+        {preds.map((id) => {
+          const blocker = nodesById.get(id)
+          return blocker ? (
+            <Row
+              key={id}
+              node={blocker}
+              sub={`${id} · ${blocker.status}`}
+              extra={
+                <Badge variant={pending(blocker) ? "destructive" : "secondary"}>
+                  {pending(blocker) ? "Pendiente" : "Resuelto"}
+                </Badge>
+              }
+              onSelect={onSelect}
+            />
+          ) : null
+        })}
+        {noBlockers && (
+          <p className="text-xs text-muted-foreground">
+            {pending(node)
+              ? "No tiene bloqueos pendientes."
+              : "Esta issue ya está resuelta."}
+          </p>
+        )}
+      </Section>
+      <Section label={`Dependientes · ${downstream.length}`}>
+        {downstream.length ? (
+          downstream.map((id) => {
+            const dependent = nodesById.get(id)
+            return dependent ? (
               <Row
-                key={child.id}
-                node={child}
-                sub={`${child.id} · ${child.status}`}
+                key={id}
+                node={dependent}
+                sub={`${id} · ${dependent.status}`}
                 extra={
-                  child.inCycle ? (
-                    <span className="text-[11px] text-muted-foreground">
-                      en ciclo
-                    </span>
-                  ) : (
-                    <AddChildToCycleButton node={child} cycle={cycle} />
-                  )
+                  <Badge variant="outline">
+                    {(graph.succs[node.id] ?? []).includes(id)
+                      ? "Directo"
+                      : "Indirecto"}
+                  </Badge>
                 }
                 onSelect={onSelect}
               />
-            ))}
-          </Section>
+            ) : null
+          })
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            No hay issues esperando esta issue.
+          </p>
         )}
-
-        <Section label={`Bloqueado por · ${preds.length}`}>
-          {preds.length ? (
-            preds.map((id) => {
-              const p = nodesById.get(id)
-              if (!p) return null
-              return (
-                <Row
-                  key={id}
-                  node={p}
-                  sub={`${id} · ${p.status}`}
-                  extra={
-                    p.type !== "completed" ? (
-                      <span
-                        className="size-1.5 shrink-0 rounded-full"
-                        style={{ background: "var(--status-stop)" }}
-                      />
-                    ) : undefined
-                  }
-                  onSelect={onSelect}
-                />
-              )
-            })
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Nada lo frena. Se puede tomar hoy.
-            </p>
-          )}
-        </Section>
-
-        <Section label={`Desbloquea · ${downstream.length} aguas abajo`}>
-          {downstream.length ? (
-            downstream.map((id) => {
-              const d = nodesById.get(id)
-              if (!d) return null
-              return (
-                <Row
-                  key={id}
-                  node={d}
-                  sub={`${id} · ${d.pts ? `${d.pts} pt` : "sin estimar"}`}
-                  extra={
-                    (graph.succs[node.id] ?? []).includes(id) ? (
-                      <span className="text-[11px] text-muted-foreground">
-                        directo
-                      </span>
-                    ) : undefined
-                  }
-                  onSelect={onSelect}
-                />
-              )
-            })
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              No hay nada esperando esta issue.
-            </p>
-          )}
-        </Section>
-      </div>
+      </Section>
     </>
   )
 }
-
+const EMPTY_MESSAGES: Record<Condition, string> = {
+  blocked: "No hay pendientes bloqueadas.",
+  ready: "No hay issues listas para empezar.",
+  unestimated: "No hay pendientes sin estimar.",
+  unassigned: "No hay pendientes sin responsable.",
+}
 function SummaryView({
   nodesById,
+  graph,
   chain,
   bottlenecksList,
   stranded,
@@ -535,162 +440,208 @@ function SummaryView({
   analysis,
   onSelect,
   onHover,
-}: {
-  nodesById: Map<string, Node>
-  chain: string[]
-  bottlenecksList: Bottleneck[]
-  stranded: StrandedChildren[]
-  openBlocksList: Array<[string, string]>
-  analysis: Analysis | null
-  onSelect: (id: string) => void
-  onHover: (id: string | null) => void
-}) {
+  group,
+  onGroup,
+}: PanelProps) {
+  const groups = actionGroups([...nodesById.values()], graph)
+  if (group)
+    return (
+      <>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="self-start"
+          onClick={() => onGroup(null)}
+        >
+          <ArrowLeftIcon data-icon="inline-start" />
+          Volver al resumen
+        </Button>
+        <h2 className="text-lg font-semibold">
+          {CONDITIONS[group]} · {groups[group].length}
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Pendientes del ciclo completo. Seleccioná una issue para ver su
+          detalle y ubicarla en el grafo.
+        </p>
+        {groups[group].length ? (
+          groups[group].map((node) => (
+            <Row
+              key={node.id}
+              node={node}
+              sub={`${node.id} · ${node.status} · ${node.who ?? "Sin responsable"}`}
+              onSelect={onSelect}
+            />
+          ))
+        ) : (
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>Todo al día</EmptyTitle>
+              <EmptyDescription>{EMPTY_MESSAGES[group]}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )}
+      </>
+    )
   return (
     <>
-      <AnalyzeButton hasAnalysis={Boolean(analysis)} />
-      {analysis && analysis.decisions.length > 0 && (
-        <Section label={`Decisiones a tomar · ${analysis.generated}`}>
-          <div className="flex flex-col gap-2.5">
-            {analysis.decisions.map((d, i) => (
-              <div key={i} className="rounded-md border p-3">
-                <Badge
-                  variant={d.sev === "alta" ? "destructive" : "secondary"}
-                  className={cn(
-                    "mb-1.5",
-                    d.sev === "media" &&
-                      "bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
-                  )}
+      <div>
+        <h2 className="text-lg font-semibold">Acciones del ciclo</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Elegí qué revisar. Los conteos incluyen todas las pendientes del
+          ciclo.
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {(Object.keys(CONDITIONS) as Condition[]).map((key) => (
+          <Card key={key} size="sm">
+            <CardHeader>
+              <CardTitle>{CONDITIONS[key]}</CardTitle>
+              <CardDescription>
+                {groups[key].length ? "Pendientes del ciclo" : "Sin pendientes"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <span className="text-3xl font-semibold tabular-nums">
+                {groups[key].length}
+              </span>
+            </CardContent>
+            <CardFooter>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => onGroup(key)}
+                aria-label={`Ver ${CONDITIONS[key].toLowerCase()}`}
+              >
+                Ver issues
+              </Button>
+            </CardFooter>
+          </Card>
+        ))}
+      </div>
+      <details className="group rounded-lg border p-3">
+        <summary className="cursor-pointer text-sm font-semibold">
+          Dependencias y riesgos
+        </summary>
+        <div className="mt-4 flex flex-col gap-5">
+          <Section label="Cuellos de botella">
+            {bottlenecksList
+              .filter((b) => {
+                const node = nodesById.get(b.id)
+                return node && pending(node)
+              })
+              .slice(0, 5)
+              .map((b) => {
+                const node = nodesById.get(b.id)!
+                return (
+                  <Row
+                    key={b.id}
+                    node={node}
+                    sub={`${b.id} · ${b.downstreamCount} dependientes · ${b.downstreamPoints} pt`}
+                    onSelect={onSelect}
+                  />
+                )
+              })}
+            {!bottlenecksList.length && (
+              <p className="text-xs text-muted-foreground">
+                No hay cuellos de botella.
+              </p>
+            )}
+          </Section>
+          <Section label="Cadena de dependencias">
+            <div className="flex flex-wrap items-center gap-1">
+              {chain.map((id) => (
+                <Button
+                  key={id}
+                  variant="outline"
+                  size="xs"
+                  onClick={() => onSelect(id)}
                 >
-                  {SEVERITY_LABEL[d.sev]}
-                </Badge>
-                <h4 className="mb-1 text-[12.5px] font-semibold">{d.title}</h4>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  {d.body}
-                </p>
-                {d.issues.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {d.issues.map((id) => (
-                      <button
+                  {id}
+                </Button>
+              ))}
+            </div>
+            {!chain.length && (
+              <p className="text-xs text-muted-foreground">
+                No hay cadenas de dependencias.
+              </p>
+            )}
+          </Section>
+          <Section label="Sub-issues fuera del ciclo">
+            {stranded.map((entry) => {
+              const node = nodesById.get(entry.parent)
+              return node ? (
+                <Row
+                  key={node.id}
+                  node={node}
+                  sub={`${node.id} · ${entry.outside.length} sub-issues fuera del ciclo`}
+                  onSelect={onSelect}
+                />
+              ) : null
+            })}
+            {!stranded.length && (
+              <p className="text-xs text-muted-foreground">
+                No hay sub-issues fuera del ciclo.
+              </p>
+            )}
+          </Section>
+          <p className="text-xs text-muted-foreground">
+            {
+              openBlocksList.filter(([a, b]) => {
+                const blocker = nodesById.get(a)
+                const target = nodesById.get(b)
+                return blocker && target && pending(blocker) && pending(target)
+              }).length
+            }{" "}
+            relaciones de bloqueo pendientes.
+          </p>
+        </div>
+      </details>
+      <details className="rounded-lg border p-3">
+        <summary className="cursor-pointer text-sm font-semibold">
+          Análisis de IA
+        </summary>
+        <div className="mt-4 flex flex-col gap-3">
+          <AnalyzeButton hasAnalysis={Boolean(analysis)} />
+          {analysis ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Actualizado: {analysis.generated}
+              </p>
+              <p className="text-sm">{analysis.headline}</p>
+              {analysis.decisions.map((decision, index) => (
+                <Card key={index} size="sm">
+                  <CardHeader>
+                    <CardTitle>{decision.title}</CardTitle>
+                    <CardDescription>Prioridad {decision.sev}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-xs leading-relaxed">{decision.body}</p>
+                  </CardContent>
+                  <CardFooter className="flex flex-wrap gap-1">
+                    {decision.issues.map((id) => (
+                      <Button
                         key={id}
-                        type="button"
+                        variant="outline"
+                        size="xs"
                         onClick={() => onSelect(id)}
                         onMouseEnter={() => onHover(id)}
                         onMouseLeave={() => onHover(null)}
-                        className="rounded border px-1.5 py-0.5 text-[10.5px] font-semibold"
                       >
                         {id}
-                      </button>
+                      </Button>
                     ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      <Section label="Sub-issues fuera del ciclo">
-        {stranded.length ? (
-          stranded.map((s) => {
-            const parent = nodesById.get(s.parent)
-            if (!parent) return null
-            return (
-              <Row
-                key={s.parent}
-                node={parent}
-                sub={`${s.parent} · de ${s.total} hijos, ${s.outside.length} en backlog`}
-                extra={
-                  <span className="text-[15px] font-semibold text-status-stop">
-                    {s.outside.length}
-                  </span>
-                }
-                onSelect={onSelect}
-              />
-            )
-          })
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Ninguna issue del ciclo tiene sub-issues afuera.
-          </p>
-        )}
-      </Section>
-
-      <Section label="Cuellos de botella">
-        {bottlenecksList.length ? (
-          bottlenecksList.slice(0, 5).map((b) => {
-            const node = nodesById.get(b.id)
-            if (!node) return null
-            return (
-              <Row
-                key={b.id}
-                node={node}
-                sub={`${b.id} · ${node.status} · ${node.who ?? "sin asignar"} · frena ${b.downstreamPoints} pt`}
-                extra={
-                  <span className="text-[15px] font-semibold">
-                    {b.downstreamCount}
-                  </span>
-                }
-                onSelect={onSelect}
-              />
-            )
-          })
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            No hay bloqueantes abiertos.
-          </p>
-        )}
-      </Section>
-
-      <Section label="Cadena más larga">
-        <div className="flex flex-wrap items-center gap-1 text-[11.5px]">
-          {chain.map((id, i) => {
-            const node = nodesById.get(id)
-            if (!node) return null
-            return (
-              <span key={id} className="flex items-center gap-1">
-                {i > 0 && <span className="text-muted-foreground">→</span>}
-                <button
-                  type="button"
-                  onClick={() => onSelect(id)}
-                  className="rounded border px-1.5 py-0.5 font-semibold"
-                  style={{ color: statusTextVar(node) }}
-                >
-                  {id}
-                </button>
-              </span>
-            )
-          })}
+                  </CardFooter>
+                </Card>
+              ))}
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Generá un análisis para revisar riesgos y decisiones.
+            </p>
+          )}
         </div>
-        {chain.length > 0 && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            {chain.length} pasos en serie. Ningún atajo de paralelización los
-            acorta.
-          </p>
-        )}
-      </Section>
-
-      <Section label={`Bloqueos abiertos · ${openBlocksList.length}`}>
-        {openBlocksList.length ? (
-          openBlocksList.map(([a, b]) => {
-            const blocker = nodesById.get(a)
-            const blocked = nodesById.get(b)
-            if (!blocker) return null
-            return (
-              <Row
-                key={`${a}|${b}`}
-                node={blocker}
-                label={`${blocker.short} → frena ${blocked?.short ?? b}`}
-                sub={`${a} → ${b}`}
-                onSelect={onSelect}
-              />
-            )
-          })
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            No hay bloqueos abiertos.
-          </p>
-        )}
-      </Section>
+      </details>
     </>
   )
 }

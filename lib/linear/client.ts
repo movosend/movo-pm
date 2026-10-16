@@ -9,12 +9,8 @@ import {
 import { fromLinearResponse, fromSearchResponse } from "@/lib/linear/normalize"
 import type { SearchIssue, Snapshot } from "@/lib/schema/snapshot"
 
-export type IssueUpdateInput = {
-  assigneeId?: string | null
-  stateId?: string
-  cycleId?: string
-  estimate?: number | null
-}
+import type { IssueUpdateInput, IssueValues } from "@/lib/schema/issue-update"
+export type { IssueUpdateInput } from "@/lib/schema/issue-update"
 
 /**
  * Boundary between "how we read Linear" and everything downstream.
@@ -24,6 +20,7 @@ export type IssueUpdateInput = {
  */
 export interface LinearSource {
   getActiveCycleSnapshot(): Promise<Snapshot>
+  getIssueValues(id: string): Promise<IssueValues>
   updateIssue(id: string, input: IssueUpdateInput): Promise<void>
   searchIssues(term: string): Promise<SearchIssue[]>
 }
@@ -74,13 +71,35 @@ class LinearApiKeySource implements LinearSource {
     return fromLinearResponse(json, this.workspace)
   }
 
+  async getIssueValues(id: string): Promise<IssueValues> {
+    const json = await this.request(
+      `query IssueValues($id: String!) {
+      issue(id: $id) { assignee { id } state { id } cycle { id } estimate }
+    }`,
+      { id }
+    )
+    if (json.errors?.length)
+      throw new Error(
+        json.errors
+          .map((error: { message: string }) => error.message)
+          .join(" · ")
+      )
+    const issue = json.data?.issue
+    if (!issue?.state?.id)
+      throw new Error("No se pudo leer el estado actual de la issue.")
+    return {
+      assigneeId: issue.assignee?.id ?? null,
+      stateId: issue.state.id,
+      cycleId: issue.cycle?.id ?? null,
+      estimate: issue.estimate ?? null,
+    }
+  }
+
   async updateIssue(id: string, input: IssueUpdateInput): Promise<void> {
     const json = await this.request(ISSUE_UPDATE_MUTATION, { id, input })
     if (json.errors?.length) {
       throw new Error(
-        (json.errors as { message: string }[])
-          .map((e) => e.message)
-          .join(" · ")
+        (json.errors as { message: string }[]).map((e) => e.message).join(" · ")
       )
     }
     if (!json.data?.issueUpdate?.success) {
