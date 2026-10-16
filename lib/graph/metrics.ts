@@ -2,7 +2,10 @@ import type { Graph } from "@/lib/graph/build"
 import type { Node } from "@/lib/schema/snapshot"
 
 /** Every node reachable from `start` following `map` (preds or succs). */
-export function walk(start: string, map: Record<string, string[]>): Set<string> {
+export function walk(
+  start: string,
+  map: Record<string, string[]>
+): Set<string> {
   const out = new Set<string>()
   const queue = [...(map[start] ?? [])]
   while (queue.length) {
@@ -91,13 +94,16 @@ export type StrandedChildren = {
 /** In-cycle issues whose sub-issues (hierarchy, not blocking) leaked out. */
 export function strandedChildren(nodes: Node[]): StrandedChildren[] {
   return nodes
-    .filter((n) => n.inCycle)
+    .filter((n) => n.isEpic)
     .map((parent) => {
-      const children = nodes.filter((n) => n.parent === parent.id)
-      const outside = children.filter((n) => !n.inCycle).map((n) => n.id)
-      return { parent: parent.id, total: children.length, outside }
+      const children = nodes.filter((n) => n.parent === parent.id && !n.isEpic)
+      return {
+        parent: parent.id,
+        total: children.length,
+        outside: children.filter((n) => !n.inCycle).map((n) => n.id),
+      }
     })
-    .filter((x) => x.outside.length > 0)
+    .filter((entry) => entry.total > entry.outside.length)
 }
 
 export type CriticalPathLoad = {
@@ -122,7 +128,7 @@ export function criticalPathLoad(
     who,
     issuesOnPath: chain.filter((id) => byId.get(id)?.who === who).length,
     openIssues: nodes.filter(
-      (n) => n.who === who && n.inCycle && n.type !== "completed"
+      (n) => !n.isEpic && n.who === who && n.inCycle && n.type !== "completed"
     ).length,
   }))
 }

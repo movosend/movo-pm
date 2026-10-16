@@ -149,6 +149,7 @@ function IssueField({
 }
 function AddToCycleButton({ node, cycle }: { node: Node; cycle: Cycle }) {
   const { mutate, busy } = useIssueUpdates()
+  if (node.isEpic) return null
   return (
     <Button
       size="sm"
@@ -168,6 +169,12 @@ function AddToCycleButton({ node, cycle }: { node: Node; cycle: Cycle }) {
   )
 }
 export type PanelProps = {
+  planning?: {
+    included: Set<string>
+    busy: boolean
+    onToggle: (node: Node) => void
+    onAddMany: (ids: string[]) => void
+  }
   selected: Node | null
   nodesById: Map<string, Node>
   graph: Graph
@@ -217,6 +224,7 @@ function DetailView({
   onBack,
   onFocus,
   onShareIssue,
+  planning,
 }: PanelProps & { node: Node }) {
   const preds = graph.preds[node.id] ?? []
   const downstream = [...walk(node.id, graph.succs)].filter(
@@ -238,10 +246,11 @@ function DetailView({
           onClick={onBack}
         >
           <ArrowLeftIcon data-icon="inline-start" />
-          Volver al resumen
+          {planning ? "Volver a la hoja" : "Volver al resumen"}
         </Button>
         <span className="text-xs font-semibold text-muted-foreground">
           {node.id}
+          {node.isEpic ? " · Épica" : ""}
         </span>
         <h2 className="text-[15px] leading-snug font-semibold tracking-tight">
           {node.title}
@@ -258,7 +267,26 @@ function DetailView({
             Copiar enlace de issue
           </Button>
         </div>
-        {!node.inCycle && <AddToCycleButton node={node} cycle={cycle} />}
+        {planning && !node.isEpic ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={planning.busy}
+            onClick={() => planning.onToggle(node)}
+          >
+            {planning.included.has(node.id)
+              ? "Quitar de la hoja"
+              : "Agregar a la hoja"}
+          </Button>
+        ) : !planning && !node.isEpic && !node.inCycle ? (
+          <AddToCycleButton node={node} cycle={cycle} />
+        ) : null}
+        {node.isEpic && (
+          <p className="text-xs text-muted-foreground">
+            Épica · Contexto compartido. El trabajo y las estimaciones
+            corresponden a sus subissues.
+          </p>
+        )}
       </div>
       <dl className="flex flex-col gap-3 text-xs">
         <div className="flex items-center justify-between gap-3">
@@ -288,32 +316,41 @@ function DetailView({
             />
           </dd>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <dt>Puntos</dt>
-          <dd>
-            <IssueField
-              node={node}
-              label="Puntos"
-              field="estimate"
-              value={node.pts === null ? "" : String(node.pts)}
-              options={[
-                { id: "", name: "Sin estimar" },
-                ...[
-                  ...new Set([
-                    ...POINT_SCALE,
-                    ...(node.pts === null ? [] : [node.pts]),
-                  ]),
-                ]
-                  .sort((a, b) => a - b)
-                  .map((point) => ({ id: String(point), name: `${point} pt` })),
-              ]}
-            />
-          </dd>
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <dt>En el ciclo</dt>
-          <dd>{node.inCycle ? "Sí" : "No"}</dd>
-        </div>
+        {!node.isEpic && (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <dt>Puntos</dt>
+              <dd>
+                <IssueField
+                  node={node}
+                  label="Puntos"
+                  field="estimate"
+                  value={node.pts === null ? "" : String(node.pts)}
+                  options={[
+                    { id: "", name: "Sin estimar" },
+                    ...[
+                      ...new Set([
+                        ...POINT_SCALE,
+                        ...(node.pts === null ? [] : [node.pts]),
+                      ]),
+                    ]
+                      .sort((a, b) => a - b)
+                      .map((point) => ({
+                        id: String(point),
+                        name: `${point} pt`,
+                      })),
+                  ]}
+                />
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt>Ciclo</dt>
+              <dd>
+                {node.cycleName ?? (node.inCycle ? cycle.name : "Sin ciclo")}
+              </dd>
+            </div>
+          </>
+        )}
         <div className="flex items-center justify-between gap-3">
           <dt>Linear</dt>
           <dd>
@@ -333,7 +370,7 @@ function DetailView({
         <IssueDescription description={node.description} />
       </Section>
       {node.parent && (
-        <Section label="Issue padre">
+        <Section label="Épica">
           {parent ? (
             <Row
               node={parent}
@@ -341,26 +378,57 @@ function DetailView({
               onSelect={onSelect}
             />
           ) : (
-            <a
-              className="text-xs text-primary underline"
-              href={`https://linear.app/${workspace}/issue/${node.parent}`}
-              target="_blank"
-              rel="noreferrer"
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onSelect(node.parent!)}
             >
-              {node.parent} · Abrir en Linear
-            </a>
+              {node.parentTitle ?? node.parent}
+            </Button>
           )}
         </Section>
       )}
       {children.length > 0 && (
-        <Section label={`Sub-issues · ${children.length}`}>
+        <Section label={`Subissues · ${children.length}`}>
+          {planning && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={planning.busy}
+              onClick={() =>
+                planning.onAddMany(
+                  children
+                    .filter(
+                      (child) =>
+                        !child.isEpic &&
+                        pending(child) &&
+                        !planning.included.has(child.id)
+                    )
+                    .map((child) => child.id)
+                )
+              }
+            >
+              Agregar subissues pendientes
+            </Button>
+          )}
           {children.map((child) => (
             <Row
               key={child.id}
               node={child}
               sub={`${child.id} · ${child.status}`}
               extra={
-                child.inCycle ? (
+                child.isEpic ? (
+                  <Badge variant="outline">Épica</Badge>
+                ) : planning ? (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    disabled={planning.busy}
+                    onClick={() => planning.onToggle(child)}
+                  >
+                    {planning.included.has(child.id) ? "Quitar" : "Agregar"}
+                  </Button>
+                ) : child.inCycle ? (
                   <Badge variant="secondary">En ciclo</Badge>
                 ) : (
                   <AddToCycleButton node={child} cycle={cycle} />
@@ -371,7 +439,28 @@ function DetailView({
           ))}
         </Section>
       )}
-      <Section label={`Bloqueado por · ${preds.length}`}>
+      <Section
+        label={`${node.isEpic ? "Bloqueos de la épica (contexto)" : "Bloqueado por"} · ${preds.length}`}
+      >
+        {planning && preds.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={planning.busy}
+            onClick={() =>
+              planning.onAddMany(
+                preds.filter((id) => {
+                  const n = nodesById.get(id)
+                  return (
+                    n && !n.isEpic && pending(n) && !planning.included.has(id)
+                  )
+                })
+              )
+            }
+          >
+            Agregar bloqueantes pendientes
+          </Button>
+        )}
         {preds.map((id) => {
           const blocker = nodesById.get(id)
           return blocker ? (
@@ -397,6 +486,25 @@ function DetailView({
         )}
       </Section>
       <Section label={`Dependientes · ${downstream.length}`}>
+        {planning && (graph.succs[node.id]?.length ?? 0) > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={planning.busy}
+            onClick={() =>
+              planning.onAddMany(
+                (graph.succs[node.id] ?? []).filter((id) => {
+                  const n = nodesById.get(id)
+                  return (
+                    n && !n.isEpic && pending(n) && !planning.included.has(id)
+                  )
+                })
+              )
+            }
+          >
+            Agregar desbloqueadas directas
+          </Button>
+        )}
         {downstream.length ? (
           downstream.map((id) => {
             const dependent = nodesById.get(id)
@@ -597,21 +705,21 @@ function SummaryView({
               </p>
             )}
           </Section>
-          <Section label="Sub-issues fuera del ciclo">
+          <Section label="Épicas del ciclo">
             {stranded.map((entry) => {
               const node = nodesById.get(entry.parent)
               return node ? (
                 <Row
                   key={node.id}
                   node={node}
-                  sub={`${node.id} · ${entry.outside.length} sub-issues fuera del ciclo`}
+                  sub={`${node.id} · ${entry.total - entry.outside.length} incluidas · ${entry.outside.length} fuera del ciclo`}
                   onSelect={onSelect}
                 />
               ) : null
             })}
             {!stranded.length && (
               <p className="text-xs text-muted-foreground">
-                No hay sub-issues fuera del ciclo.
+                No hay épicas con subissues en este ciclo.
               </p>
             )}
           </Section>

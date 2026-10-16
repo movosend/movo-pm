@@ -200,6 +200,7 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
         snapshot.nodes
           .filter(
             (node) =>
+              !node.isEpic &&
               (node.inCycle || showOutside) &&
               matchesFilters(node, filters, graph)
           )
@@ -436,7 +437,7 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
         animateTo(centeredView(1, showOrphans ? orphanAreaHeight : 0))
       } else if (e.key.toLowerCase() === "e") {
         const target = hovered ?? selected
-        if (target) {
+        if (target && !nodesById.get(target)?.isEpic) {
           e.preventDefault()
           setEstimating(target)
           setEstimateBuffer("")
@@ -484,7 +485,10 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
     return () => el.removeEventListener("wheel", onWheel)
   }, [])
 
-  const Panel = selected && !selectedNode ? RemoteIssuePanel : SidePanel
+  const Panel =
+    selected && (!selectedNode || selectedNode.isEpic)
+      ? RemoteIssuePanel
+      : SidePanel
   const panel = (
     <Panel
       key={selected ?? "summary"}
@@ -508,7 +512,7 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
         setGroup(null)
       }}
       onHover={setHovered}
-      onFocus={focusSelected}
+      onFocus={selectedNode?.isEpic ? undefined : focusSelected}
       onShareIssue={() => {
         void share(true)
       }}
@@ -541,7 +545,9 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
         }
         count={matchingIds.size}
         total={
-          snapshot.nodes.filter((node) => node.inCycle || showOutside).length
+          snapshot.nodes.filter(
+            (node) => !node.isEpic && (node.inCycle || showOutside)
+          ).length
         }
         onShare={() => {
           void share(false)
@@ -567,6 +573,7 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
         </Alert>
       )}
       {selectedNode &&
+        !selectedNode.isEpic &&
         ((!selectedNode.inCycle && !showOutside) ||
           (filtering && !matchingIds.has(selectedNode.id)) ||
           (!active.includes("showOrphans") &&
@@ -649,31 +656,6 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
                   </g>
                 )
               })}
-
-              {showParents &&
-                snapshot.nodes.map((n) => {
-                  if (!n.parent || !layout.pos[n.id] || !layout.pos[n.parent])
-                    return null
-                  const a = layout.pos[n.parent]
-                  const b = layout.pos[n.id]
-                  const ax = a.x + NW / 2
-                  const ay = a.y + NH / 2
-                  const bx = b.x + NW / 2
-                  const by = b.y + NH / 2
-                  const bow = Math.max(40, Math.abs(by - ay) * 0.5)
-                  return (
-                    <path
-                      key={n.id}
-                      d={`M${ax},${ay} C${ax - bow},${ay} ${bx - bow},${by} ${bx},${by}`}
-                      fill="none"
-                      stroke="var(--status-review)"
-                      strokeWidth={1}
-                      strokeDasharray="2 4"
-                      opacity={highlightedNodeIds ? 0.1 : lit ? 0.12 : 0.4}
-                      markerEnd="url(#edge-arrow)"
-                    />
-                  )
-                })}
 
               {layout.edges
                 .map(([a, b]) => {
@@ -770,6 +752,16 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
                       setPanelOpen(true)
                     }}
                   >
+                    {showParents && n.parent && (
+                      <text
+                        x={3}
+                        y={-7}
+                        className="fill-muted-foreground text-[9px]"
+                      >
+                        <title>{n.parentTitle ?? n.parent}</title>
+                        {(n.parentTitle ?? n.parent).slice(0, 36)}
+                      </text>
+                    )}
                     {isHovered && (
                       <rect
                         x={-5}

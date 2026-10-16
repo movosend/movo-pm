@@ -47,7 +47,7 @@ export function layoutGraph(
 
   const visible = new Set(
     snapshot.nodes
-      .filter((n) => n.inCycle || options.showOutside)
+      .filter((n) => n.isEpic !== true && (n.inCycle || options.showOutside))
       .map((n) => n.id)
   )
   const edges = snapshot.blocks.filter(

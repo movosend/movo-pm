@@ -9,6 +9,11 @@ export const issueTypeSchema = z.enum([
 ])
 
 export const nodeSchema = z.object({
+  uuid: z.string().optional(),
+  isEpic: z.boolean().optional(),
+  parentTitle: z.string().nullable().optional(),
+  cycleId: z.string().nullable().optional(),
+  cycleName: z.string().nullable().optional(),
   id: z.string(),
   short: z.string(),
   title: z.string(),
@@ -55,6 +60,8 @@ export const teamMemberSchema = z.object({
 })
 
 export const searchIssueSchema = z.object({
+  uuid: z.string().optional(),
+  isEpic: z.boolean().optional(),
   id: z.string(),
   short: z.string(),
   title: z.string(),

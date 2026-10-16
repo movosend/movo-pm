@@ -1,0 +1,2 @@
+ALTER TABLE "planning_transfer_items" ADD COLUMN "attempted" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "planning_issue_in_flight" ON "planning_transfer_items" USING btree ("issue_id") WHERE "planning_transfer_items"."status" in ('applying', 'undoing');

@@ -1,5 +1,7 @@
 const ISSUE_DETAIL_FRAGMENT = `fragment Lite on Issue {
   description
+  id
+  childCheck: children(first: 1) { nodes { id } }
   identifier
   title
   estimate
@@ -13,20 +15,13 @@ const ISSUE_DETAIL_FRAGMENT = `fragment Lite on Issue {
     id
     displayName
   }
-  parent {
-    identifier
-  }
-  cycle {
-    id
-  }
+  parent { identifier title }
+  cycle { id name number }
 }`
 
-// Adapted from the query in movo-pm-preplan.md (Anexo): the preplan's
-// first:250/50/50/50 nesting exceeds Linear's query complexity budget in
-// practice ("Query too complex"). 100/20/20/20 is still well above what a
-// 5-person team's cycle needs and stays under the limit — raise it and
-// paginate only if the team ever gets close to these numbers.
-export const CYCLE_GRAPH_QUERY = `query CycleGraph($teamKey: String!) {
+// Small pages keep nested epic classification below Linear's complexity limit.
+// The client follows every cursor; this is a page size, not a result limit.
+export const CYCLE_GRAPH_QUERY = `query CycleGraph($teamKey: String!, $after: String) {
   teams(filter: { key: { eq: $teamKey } }, first: 1) {
     nodes {
       key
@@ -51,15 +46,18 @@ export const CYCLE_GRAPH_QUERY = `query CycleGraph($teamKey: String!) {
         number
         startsAt
         endsAt
-        issues(first: 50) {
+        issues(first: 25, after: $after) {
+          pageInfo { hasNextPage endCursor }
           nodes {
             ...Core
             children(first: 10) {
+              pageInfo { hasNextPage endCursor }
               nodes {
                 ...Lite
               }
             }
             relations(first: 10) {
+              pageInfo { hasNextPage endCursor }
               nodes {
                 type
                 relatedIssue {
@@ -68,6 +66,7 @@ export const CYCLE_GRAPH_QUERY = `query CycleGraph($teamKey: String!) {
               }
             }
             inverseRelations(first: 10) {
+              pageInfo { hasNextPage endCursor }
               nodes {
                 type
                 issue {
@@ -83,6 +82,8 @@ export const CYCLE_GRAPH_QUERY = `query CycleGraph($teamKey: String!) {
 }
 
 fragment Core on Issue {
+  id
+  childCheck: children(first: 1) { nodes { id } }
   identifier
   title
   description
@@ -97,9 +98,8 @@ fragment Core on Issue {
     id
     displayName
   }
-  parent {
-    identifier
-  }
+  parent { ...Lite }
+  cycle { id name number }
 }
 ${ISSUE_DETAIL_FRAGMENT}`
 
@@ -125,7 +125,9 @@ export const TEAM_ID_QUERY = `query TeamId($teamKey: String!) {
 export const ISSUE_SEARCH_QUERY = `query IssueIdentifierSearch($term: String!, $teamId: String!) {
   searchIssues(term: $term, teamId: $teamId, first: 20) {
     nodes {
-      identifier
+      id
+  childCheck: children(first: 1) { nodes { id } }
+  identifier
       title
       estimate
       url
@@ -143,7 +145,7 @@ export const ISSUE_SEARCH_QUERY = `query IssueIdentifierSearch($term: String!, $
   }
 }`
 
-export const ISSUE_DETAIL_QUERY = `query IssueDetail($id: String!) {
+export const ISSUE_DETAIL_QUERY = `query IssueDetail($id: String!, $childrenAfter: String, $relationsAfter: String, $inverseAfter: String) {
   issue(id: $id) {
     ...Lite
     team {
@@ -151,9 +153,9 @@ export const ISSUE_DETAIL_QUERY = `query IssueDetail($id: String!) {
       members(first: 50) { nodes { id displayName } }
     }
     parent { ...Lite }
-    children(first: 50) { nodes { ...Lite } }
-    relations(first: 50) { nodes { type relatedIssue { ...Lite } } }
-    inverseRelations(first: 50) { nodes { type issue { ...Lite } } }
+    children(first: 50, after: $childrenAfter) { nodes { ...Lite } pageInfo { hasNextPage endCursor } }
+    relations(first: 50, after: $relationsAfter) { nodes { type relatedIssue { ...Lite } } pageInfo { hasNextPage endCursor } }
+    inverseRelations(first: 50, after: $inverseAfter) { nodes { type issue { ...Lite } } pageInfo { hasNextPage endCursor } }
   }
 }
 ${ISSUE_DETAIL_FRAGMENT}`

@@ -1,4 +1,5 @@
 import "server-only"
+import { mapConcurrent } from "@/lib/planning/concurrency"
 
 import {
   CYCLE_GRAPH_QUERY,
@@ -24,6 +25,7 @@ export type { IssueUpdateInput } from "@/lib/schema/issue-update"
  * and its implementation change — nothing that consumes a Snapshot does.
  */
 export interface LinearSource {
+  getPlanningCycles(): Promise<import("@/lib/planning/types").PlanningCycle[]>
   getActiveCycleSnapshot(): Promise<Snapshot>
   getIssueDetail(id: string, cycleId: string): Promise<IssueDetail>
   getIssueValues(id: string): Promise<IssueValues>
@@ -59,6 +61,7 @@ class LinearApiKeySource implements LinearSource {
       },
       body: JSON.stringify({ query, variables }),
       cache: "no-store",
+      signal: AbortSignal.timeout(20000),
     })
 
     if (res.status === 401 || res.status === 403) {
@@ -67,21 +70,127 @@ class LinearApiKeySource implements LinearSource {
       )
     }
 
-    return res.json()
+    const json = await res.json()
+    if (json.errors?.length)
+      throw new Error(
+        json.errors.map((e: { message: string }) => e.message).join(" · ")
+      )
+    if (!res.ok) throw new Error(`Linear no respondió (HTTP ${res.status}).`)
+    return json
   }
 
   async getActiveCycleSnapshot(): Promise<Snapshot> {
     const json = await this.request(CYCLE_GRAPH_QUERY, {
       teamKey: this.teamKey,
     })
-    return fromLinearResponse(json, this.workspace)
+    const active = json.data?.teams?.nodes?.[0]?.activeCycle
+    if (active) {
+      let page = active.issues
+      while (page.pageInfo?.hasNextPage) {
+        const next = await this.request(CYCLE_GRAPH_QUERY, {
+          teamKey: this.teamKey,
+          after: page.pageInfo.endCursor,
+        })
+        page = next.data.teams.nodes[0].activeCycle.issues
+        active.issues.nodes.push(...page.nodes)
+      }
+    }
+    const snapshot = fromLinearResponse(json, this.workspace)
+    // Fetch full epic context and only the issue relations truncated by the compact cycle query.
+    const extraIds = new Set<string>(
+      snapshot.nodes.filter((node) => node.isEpic).map((node) => node.id)
+    )
+    for (const issue of active.issues.nodes) {
+      if (
+        [issue.children, issue.relations, issue.inverseRelations].some(
+          (connection) => connection?.pageInfo?.hasNextPage
+        )
+      )
+        extraIds.add(issue.identifier)
+    }
+    const details = await mapConcurrent([...extraIds], (id) =>
+      this.getIssueDetail(id, snapshot.cycle.id)
+    )
+    const nodes = new Map(snapshot.nodes.map((node) => [node.id, node]))
+    const blocks = new Map(
+      snapshot.blocks.map((edge) => [edge.join("|"), edge])
+    )
+    for (const detail of details) {
+      detail.nodes.forEach((node) => nodes.set(node.id, node))
+      detail.blocks.forEach((edge) => blocks.set(edge.join("|"), edge))
+    }
+    return {
+      ...snapshot,
+      nodes: [...nodes.values()],
+      blocks: [...blocks.values()],
+    }
   }
 
   async getIssueDetail(id: string, cycleId: string): Promise<IssueDetail> {
-    return fromIssueDetailResponse(
-      await this.request(ISSUE_DETAIL_QUERY, { id }),
-      cycleId
+    const json = await this.request(ISSUE_DETAIL_QUERY, { id })
+    const issue = json.data?.issue
+    if (!issue) throw new Error("No se encontró la issue.")
+    for (const [field, cursor] of [
+      ["children", "childrenAfter"],
+      ["relations", "relationsAfter"],
+      ["inverseRelations", "inverseAfter"],
+    ]) {
+      let page = issue[field]
+      while (page.pageInfo?.hasNextPage) {
+        const next = await this.request(ISSUE_DETAIL_QUERY, {
+          id,
+          [cursor]: page.pageInfo.endCursor,
+        })
+        page = next.data.issue[field]
+        issue[field].nodes.push(...page.nodes)
+      }
+    }
+    return fromIssueDetailResponse(json, cycleId)
+  }
+
+  async getPlanningCycles(): Promise<
+    import("@/lib/planning/types").PlanningCycle[]
+  > {
+    const teamId = await this.resolveTeamId()
+    const json = await this.request(
+      `query PlanningCycles($id: String!) {
+      team(id: $id) {
+        activeCycle { id name number startsAt endsAt }
+        cycles(first: 50) { nodes { id name number startsAt endsAt } pageInfo { hasNextPage endCursor } }
+      }
+    }`,
+      { id: teamId }
     )
+    const team = json.data.team
+    const cycles = [...team.cycles.nodes]
+    let page = team.cycles
+    while (page.pageInfo.hasNextPage) {
+      const next = await this.request(
+        `query MoreCycles($id: String!, $after: String!) {
+        team(id: $id) { cycles(first: 50, after: $after) { nodes { id name number startsAt endsAt } pageInfo { hasNextPage endCursor } } }
+      }`,
+        { id: teamId, after: page.pageInfo.endCursor }
+      )
+      page = next.data.team.cycles
+      cycles.push(...page.nodes)
+    }
+    const active = team.activeCycle
+    const next = cycles
+      .filter(
+        (c) =>
+          new Date(c.startsAt).getTime() >
+          (active ? new Date(active.startsAt).getTime() : Date.now())
+      )
+      .sort(
+        (a, b) =>
+          new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+      )[0]
+    return [
+      active && { ...active, kind: "current" },
+      next && { ...next, kind: "next" },
+    ]
+      .filter(Boolean)
+      .map((c) => ({ ...c, name: c.name ?? `Ciclo ${c.number}` }))
   }
 
   async getIssueValues(id: string): Promise<IssueValues> {
@@ -109,6 +218,17 @@ class LinearApiKeySource implements LinearSource {
   }
 
   async updateIssue(id: string, input: IssueUpdateInput): Promise<void> {
+    if (input.cycleId !== undefined || input.estimate !== undefined) {
+      const check = await this.request(
+        `query IssueKind($id: String!) { issue(id: $id) { children(first: 1) { nodes { id } } } }`,
+        { id }
+      )
+      if (!check.data?.issue) throw new Error("No se encontró la issue.")
+      if (check.data.issue.children.nodes.length)
+        throw new Error(
+          "Las épicas no se estiman ni se agregan a ciclos. Elegí sus subissues."
+        )
+    }
     const json = await this.request(ISSUE_UPDATE_MUTATION, { id, input })
     if (json.errors?.length) {
       throw new Error(

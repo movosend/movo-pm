@@ -9,13 +9,16 @@ import type {
 // Mirrors the Core/Lite fragments — kept intentionally loose (no brand types)
 // since this is the only place that ever sees the raw Linear response.
 type LinearIssueLite = {
+  id?: string
+  childCheck?: { nodes: { id: string }[] }
+  cycle?: { id: string; name?: string | null; number?: number } | null
   identifier: string
   title: string
   estimate: number | null
   url: string
   state: { id: string; name: string; type: string } | null
   assignee: { id: string; displayName: string } | null
-  parent: { identifier: string } | null
+  parent: { identifier: string; title?: string } | null
 }
 
 type LinearIssueCore = LinearIssueLite & {
@@ -74,6 +77,8 @@ function toNode(
   inCycle: boolean
 ): Node {
   return {
+    uuid: issue.id,
+    isEpic: issue.childCheck ? issue.childCheck.nodes.length > 0 : undefined,
     id: issue.identifier,
     title: issue.title,
     short: shorten(issue.title),
@@ -82,6 +87,11 @@ function toNode(
     pts: issue.estimate ?? null,
     who: initials(issue.assignee?.displayName),
     parent: issue.parent?.identifier ?? null,
+    parentTitle: issue.parent?.title ?? null,
+    cycleId: issue.cycle?.id ?? null,
+    cycleName: issue.cycle
+      ? (issue.cycle.name ?? `Ciclo ${issue.cycle.number}`)
+      : null,
     inCycle,
     description: issue.description ?? null,
     assigneeId: issue.assignee?.id ?? null,
@@ -122,7 +132,14 @@ export function fromLinearResponse(
     map.set(issue.identifier, toNode(issue, forceInCycle))
   }
 
-  cycle.issues.nodes.forEach((issue) => add(issue, true))
+  cycle.issues.nodes.forEach((issue) => {
+    add(issue, true)
+    if (issue.parent && "state" in issue.parent)
+      add(
+        issue.parent as LinearIssueLite,
+        inCycleIds.has(issue.parent.identifier)
+      )
+  })
 
   const blocks = new Set<string>()
   cycle.issues.nodes.forEach((issue) => {
@@ -177,6 +194,8 @@ export function fromLinearResponse(
 }
 
 type LinearSearchIssue = {
+  id?: string
+  childCheck?: { nodes: { id: string }[] }
   identifier: string
   title: string
   estimate: number | null
@@ -199,6 +218,8 @@ export function fromSearchResponse(json: LinearSearchResponse): SearchIssue[] {
   return (json.data?.searchIssues?.nodes ?? []).map((issue) => ({
     id: issue.identifier,
     short: shorten(issue.title),
+    uuid: issue.id,
+    isEpic: issue.childCheck ? issue.childCheck.nodes.length > 0 : undefined,
     title: issue.title,
     status: issue.state?.name ?? "?",
     type: (issue.state?.type as Node["type"]) ?? "backlog",

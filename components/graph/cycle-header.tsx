@@ -1,14 +1,8 @@
 import { FreshnessIndicator } from "@/components/graph/freshness-indicator"
 import type { Cycle, Node } from "@/lib/schema/snapshot"
 
-export function CycleHeader({
-  cycle,
-  nodes,
-}: {
-  cycle: Cycle
-  nodes: Node[]
-}) {
-  const inCycle = nodes.filter((n) => n.inCycle)
+export function CycleHeader({ cycle, nodes }: { cycle: Cycle; nodes: Node[] }) {
+  const inCycle = nodes.filter((n) => n.inCycle && !n.isEpic)
   const done = inCycle.filter((n) => n.type === "completed")
   const pts = inCycle.reduce((sum, n) => sum + (n.pts ?? 0), 0)
   const donePts = done.reduce((sum, n) => sum + (n.pts ?? 0), 0)

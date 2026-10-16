@@ -1,3 +1,4 @@
+import { AppNavigation } from "@/components/app-navigation"
 import Image from "next/image"
 
 import { ProfileMenu } from "@/components/profile-menu"
@@ -12,7 +13,7 @@ export default async function AppLayout({
 
   return (
     <div className="flex h-svh flex-col overflow-hidden">
-      <header className="flex items-center gap-4 border-b px-6 py-3">
+      <header className="flex flex-wrap items-center gap-3 border-b px-4 py-3">
         <div className="flex items-center gap-2">
           <Image
             src="/logo.png"
@@ -21,8 +22,11 @@ export default async function AppLayout({
             height={30}
             className="rounded-md"
           />
-          <span className="text-sm font-medium">Movo Project Manager</span>
+          <span className="hidden text-sm font-medium sm:inline">
+            Movo Project Manager
+          </span>
         </div>
+        <AppNavigation />
         <div className="ml-auto flex items-center gap-3">
           <ProfileMenu
             name={session?.user?.name}

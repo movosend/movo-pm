@@ -18,12 +18,13 @@ export type Graph = {
  * rather than crashing — the domain glossary is explicit that the graph
  * only sees what's declared and reachable.
  */
-export function buildGraph(snapshot: Snapshot): Graph {
+export function buildGraph(snapshot: Snapshot, includeEpics = false): Graph {
   const nodesById: Record<string, Node> = {}
   const preds: Record<string, string[]> = {}
   const succs: Record<string, string[]> = {}
 
   for (const node of snapshot.nodes) {
+    if (!includeEpics && node.isEpic) continue
     nodesById[node.id] = node
     preds[node.id] = []
     succs[node.id] = []
@@ -37,7 +38,11 @@ export function buildGraph(snapshot: Snapshot): Graph {
 
   const orphans = snapshot.nodes
     .filter(
-      (n) => n.inCycle && preds[n.id].length === 0 && succs[n.id].length === 0
+      (n) =>
+        !n.isEpic &&
+        n.inCycle &&
+        preds[n.id]?.length === 0 &&
+        succs[n.id]?.length === 0
     )
     .map((n) => n.id)
 

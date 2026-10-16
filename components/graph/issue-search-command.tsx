@@ -37,6 +37,7 @@ export function IssueSearchCommand({
 
   function handleOpenChange(next: boolean) {
     if (!next) {
+      setLoading(false)
       setQuery("")
       setResults([])
       setError(null)
@@ -119,7 +120,11 @@ export function IssueSearchCommand({
       <Command shouldFilter={false}>
         <CommandInput
           value={query}
-          onValueChange={setQuery}
+          onValueChange={(value) => {
+            setQuery(value)
+            setResults([])
+            setLoading(value.trim().length >= 2)
+          }}
           placeholder="Buscar por título o código (ej. MOVO-123)…"
         />
         <CommandList>
@@ -150,7 +155,7 @@ export function IssueSearchCommand({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-xs">{issue.short}</span>
                   <span className="block text-[11px] text-muted-foreground">
-                    {issue.id} · {issue.status}
+                    {issue.id} · {issue.isEpic ? "Épica" : issue.status}
                     {issue.cycleId === cycle.id ? " · en este ciclo" : ""}
                   </span>
                 </span>

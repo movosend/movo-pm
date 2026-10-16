@@ -79,7 +79,7 @@ export function ToggleBar({
                 { key: "showOutside", label: "Fuera del ciclo", shortcut: "1" },
                 {
                   key: "showParents",
-                  label: "Relaciones padre / hijo",
+                  label: "Contexto de épicas",
                   shortcut: "2",
                 },
                 {

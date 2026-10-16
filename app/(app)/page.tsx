@@ -10,6 +10,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { getLatestSnapshot } from "@/lib/db/queries"
+import { getLinearSource } from "@/lib/linear/client"
 import type { Snapshot } from "@/lib/schema/snapshot"
 
 export const metadata: Metadata = {
@@ -37,5 +38,10 @@ export default async function Page() {
     )
   }
 
-  return <CycleGraph snapshot={row.payload as Snapshot} />
+  const stored = row.payload as Snapshot
+  // Old snapshots lack the work/epic classification. Resolve it before enabling work actions.
+  const snapshot = stored.nodes.some((node) => node.isEpic === undefined)
+    ? await getLinearSource().getActiveCycleSnapshot()
+    : stored
+  return <CycleGraph snapshot={snapshot} />
 }

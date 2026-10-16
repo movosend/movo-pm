@@ -40,7 +40,7 @@ export function matchesCondition(
   condition: Condition,
   graph: Graph
 ) {
-  if (!pending(node)) return false
+  if (node.isEpic || !pending(node)) return false
   const blocked = (graph.preds[node.id] ?? []).some((id) => {
     const blocker = graph.nodesById[id]
     return blocker && pending(blocker)

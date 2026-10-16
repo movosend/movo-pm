@@ -44,7 +44,7 @@ describe("longestChain", () => {
 })
 
 describe("strandedChildren", () => {
-  it("flags an in-cycle parent whose children leaked out of the cycle", () => {
+  it("summarizes epic context without requiring the epic itself in the cycle", () => {
     const result = strandedChildren(parentWithChildrenOutside.nodes)
     expect(result).toEqual([{ parent: "P", total: 3, outside: ["C3"] }])
   })

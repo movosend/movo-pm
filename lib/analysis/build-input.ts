@@ -66,20 +66,24 @@ export function buildAnalysisInput(
       bottlenecks: bottlenecks(graph),
       openBlocks: openBlocks(graph),
       longestChain: chain,
-      strandedChildren: strandedChildren(snapshot.nodes),
+      epicContext: strandedChildren(snapshot.nodes),
       criticalPathLoad: criticalPathLoad(chain, snapshot.nodes),
     },
-    issues: snapshot.nodes.map((n) => ({
-      id: n.id,
-      title: n.title,
-      status: n.status,
-      type: n.type,
-      pts: n.pts,
-      who: n.who,
-      parent: n.parent,
-      inCycle: n.inCycle,
-    })),
-    blocks: snapshot.blocks,
+    issues: snapshot.nodes
+      .filter((n) => !n.isEpic)
+      .map((n) => ({
+        id: n.id,
+        title: n.title,
+        status: n.status,
+        type: n.type,
+        pts: n.pts,
+        who: n.who,
+        parent: n.parent,
+        inCycle: n.inCycle,
+      })),
+    blocks: snapshot.blocks.filter(
+      ([a, b]) => graph.nodesById[a] && graph.nodesById[b]
+    ),
     externalDependencySignals: extractSignals(snapshot.nodes),
     diffFromPreviousPlanning: previous
       ? diffSnapshots(previous, snapshot)

@@ -73,7 +73,7 @@ export const isolatedNode: Snapshot = snapshot([node({ id: "SOLO" })], [])
  */
 export const parentWithChildrenOutside: Snapshot = snapshot(
   [
-    node({ id: "P", pts: null }),
+    node({ id: "P", pts: null, isEpic: true, inCycle: false }),
     node({ id: "C1", parent: "P" }),
     node({ id: "C2", parent: "P" }),
     node({ id: "C3", parent: "P", inCycle: false, type: "backlog" }),

@@ -90,11 +90,14 @@ export function RemoteIssuePanel({
   const nodesById = new Map(props.nodesById)
   detail.nodes.forEach((node) => nodesById.set(node.id, node))
   const selected = nodesById.get(issueId) ?? null
-  const graph = buildGraph({
-    ...snapshot,
-    nodes: [...nodesById.values()],
-    blocks: [...snapshot.blocks, ...detail.blocks],
-  })
+  const graph = buildGraph(
+    {
+      ...snapshot,
+      nodes: [...nodesById.values()],
+      blocks: [...snapshot.blocks, ...detail.blocks],
+    },
+    true
+  )
   return (
     <SidePanel
       {...props}
