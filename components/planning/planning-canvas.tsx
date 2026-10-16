@@ -34,6 +34,7 @@ export function PlanningCanvas({
   highlighted,
   onSelect,
   onAdd,
+  onConnect,
   busy,
   focusRequest,
 }: {
@@ -42,10 +43,36 @@ export function PlanningCanvas({
   selected: string | null
   highlighted: Set<string> | null
   onSelect: (id: string) => void
+  onConnect: (blocker: string, blocked: string) => Promise<void>
   onAdd: (id: string) => void
   busy: boolean
   focusRequest: number
 }) {
+  type Connection = {
+    source: string
+    x: number
+    y: number
+    target: string | null
+    keyboard?: boolean
+  }
+  const svg = useRef<SVGSVGElement>(null)
+  const [connection, setConnection] = useState<Connection | null>(null)
+  const connectionRef = useRef<Connection | null>(null)
+  const [saving, setSaving] = useState(false)
+  function updateConnection(value: Connection | null) {
+    connectionRef.current = value
+    setConnection(value)
+  }
+  useEffect(() => {
+    function escape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        connectionRef.current = null
+        setConnection(null)
+      }
+    }
+    window.addEventListener("keydown", escape)
+    return () => window.removeEventListener("keydown", escape)
+  }, [])
   const marker = useId().replaceAll(":", "")
   const container = useRef<HTMLDivElement>(null)
   const [view, setView] = useState({ x: 20, y: 20, k: 1 })
@@ -80,6 +107,43 @@ export function PlanningCanvas({
     }
     lastLayout.current = layout.pos
   }, [layout])
+  function invalidTarget(source: string, target: string) {
+    if (source === target) return "Elegí otra US"
+    if (snapshot.blocks.some(([a, b]) => a === source && b === target))
+      return "Este bloqueo ya existe"
+    if (snapshot.blocks.some(([a, b]) => a === target && b === source))
+      return "Ya existe el bloqueo inverso"
+    return null
+  }
+  function moveConnection(clientX: number, clientY: number) {
+    const current = connectionRef.current
+    const rect = svg.current?.getBoundingClientRect()
+    if (!current || !rect) return
+    const x = (clientX - rect.left - view.x) / view.k
+    const y = (clientY - rect.top - view.y) / view.k
+    const target =
+      Object.entries(layout.pos).find(
+        ([, p]) =>
+          x >= p.x - 12 &&
+          x <= p.x + CARD.nodeWidth + 12 &&
+          y >= p.y - 8 &&
+          y <= p.y + CARD.nodeHeight + 8
+      )?.[0] ?? null
+    updateConnection({ ...current, x, y, target })
+  }
+  async function finishConnection(target: string | null) {
+    const current = connectionRef.current
+    updateConnection(null)
+    if (!current || busy || saving) return
+    if (!target || invalidTarget(current.source, target)) return
+    lastAnchor.current = current.source
+    setSaving(true)
+    try {
+      await onConnect(current.source, target)
+    } finally {
+      setSaving(false)
+    }
+  }
   function focus() {
     const point = selected ? layout.pos[selected] : null
     const rect = container.current?.getBoundingClientRect()
@@ -154,6 +218,19 @@ export function PlanningCanvas({
           <FocusIcon />
         </Button>
       </div>
+      <div
+        role="status"
+        className="pointer-events-none absolute bottom-14 left-3 max-w-[calc(100%-1.5rem)] rounded-md bg-background/95 px-3 py-1.5 text-[11px] text-muted-foreground"
+      >
+        {saving
+          ? "Guardando dependencia en Linear…"
+          : connection
+            ? connection.target
+              ? (invalidTarget(connection.source, connection.target) ??
+                `${connection.source} bloquea a ${connection.target} · ${connection.keyboard ? "Enter" : "Soltá"} para guardar en Linear · Esc cancela`)
+              : `${connection.source} bloquea a… Elegí la US destino · Esc cancela`
+            : "Arrastrá desde el punto derecho de una US hacia otra para crear un bloqueo en Linear."}
+      </div>
       <div className="pointer-events-none absolute right-3 bottom-3 flex items-center gap-3 rounded-lg border bg-background/95 px-3 py-2 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <span className="size-3 rounded border-2 border-primary/40 bg-accent" />
@@ -178,27 +255,48 @@ export function PlanningCanvas({
         </div>
       )}
       <svg
-        className="size-full touch-none"
+        ref={svg}
+        className={cn("size-full touch-none", connection && "cursor-crosshair")}
         aria-label="Grafo de la hoja de planificación"
         onPointerDown={(event) => {
-          if ((event.target as Element).closest("button")) return
+          if (
+            connectionRef.current ||
+            saving ||
+            event.button !== 0 ||
+            (event.target as Element).closest("button, [data-connector]")
+          )
+            return
           event.currentTarget.setPointerCapture(event.pointerId)
           drag.current = { x: event.clientX, y: event.clientY }
         }}
         onPointerMove={(event) => {
+          if (connectionRef.current && !connectionRef.current.keyboard) {
+            moveConnection(event.clientX, event.clientY)
+            return
+          }
           if (!drag.current) return
           const dx = event.clientX - drag.current.x,
             dy = event.clientY - drag.current.y
           drag.current = { x: event.clientX, y: event.clientY }
           setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }))
         }}
-        onPointerUp={() => {
+        onPointerUp={(event) => {
           drag.current = null
+          if (connectionRef.current && !connectionRef.current.keyboard) {
+            moveConnection(event.clientX, event.clientY)
+            void finishConnection(connectionRef.current?.target ?? null)
+          }
+        }}
+        onLostPointerCapture={() => {
+          drag.current = null
+          if (!connectionRef.current?.keyboard) updateConnection(null)
         }}
         onPointerCancel={() => {
+          updateConnection(null)
           drag.current = null
         }}
         onWheel={(event) =>
+          !connectionRef.current &&
           setView((v) =>
             event.ctrlKey || event.metaKey
               ? {
@@ -240,6 +338,30 @@ export function PlanningCanvas({
               />
             )
           })}
+          {connection &&
+            layout.pos[connection.source] &&
+            (() => {
+              const origin = layout.pos[connection.source]
+              const target = connection.target
+                ? layout.pos[connection.target]
+                : null
+              const x1 = origin.x + CARD.nodeWidth + 8,
+                y1 = origin.y + CARD.nodeHeight / 2
+              const x2 = target ? target.x - 5 : connection.x,
+                y2 = target ? target.y + CARD.nodeHeight / 2 : connection.y
+              const bend = Math.max(50, Math.abs(x2 - x1) / 2)
+              return (
+                <path
+                  d={`M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2},${y2}`}
+                  fill="none"
+                  stroke="var(--primary)"
+                  strokeWidth={2}
+                  strokeDasharray="5 4"
+                  markerEnd={`url(#${marker})`}
+                  className="pointer-events-none"
+                />
+              )
+            })()}
           {snapshot.nodes.map((node) => {
             const point = layout.pos[node.id]
             if (!point) return null
@@ -248,6 +370,7 @@ export function PlanningCanvas({
               <g
                 key={node.id}
                 opacity={
+                  !connection &&
                   highlighted &&
                   !highlighted.has(node.id) &&
                   selected !== node.id
@@ -266,7 +389,7 @@ export function PlanningCanvas({
                     {(node.parentTitle ?? node.parent).slice(0, 35)}
                   </text>
                 )}
-                {selected === node.id && (
+                {(selected === node.id || connection?.target === node.id) && (
                   <rect
                     x={point.x - 4}
                     y={point.y - 4}
@@ -274,7 +397,15 @@ export function PlanningCanvas({
                     height={CARD.nodeHeight + 8}
                     rx={12}
                     fill="none"
-                    stroke="var(--primary)"
+                    stroke={
+                      connection?.target === node.id &&
+                      invalidTarget(connection.source, node.id)
+                        ? "var(--destructive)"
+                        : "var(--primary)"
+                    }
+                    strokeDasharray={
+                      connection?.target === node.id ? "4 3" : undefined
+                    }
                     strokeWidth={2}
                     className="pointer-events-none"
                   />
@@ -295,7 +426,16 @@ export function PlanningCanvas({
                   >
                     <button
                       className="flex h-full min-w-0 flex-1 cursor-pointer flex-col justify-center gap-1 px-3 text-left outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                      onFocus={() => {
+                        const current = connectionRef.current
+                        if (current?.keyboard)
+                          updateConnection({ ...current, target: node.id })
+                      }}
                       onClick={() => {
+                        if (connectionRef.current) {
+                          void finishConnection(node.id)
+                          return
+                        }
                         lastAnchor.current = node.id
                         onSelect(node.id)
                       }}
@@ -356,6 +496,68 @@ export function PlanningCanvas({
                     )}
                   </div>
                 </foreignObject>
+                {!ghost && (
+                  <g
+                    data-connector="true"
+                    role="button"
+                    tabIndex={busy || saving ? -1 : 0}
+                    aria-disabled={busy || saving}
+                    aria-label={`Crear bloqueo desde ${node.id}. Arrastrá hacia otra US o presioná Enter y elegí el destino.`}
+                    className={cn(
+                      "outline-none",
+                      busy || saving
+                        ? "opacity-40"
+                        : "cursor-crosshair text-muted-foreground hover:text-primary focus:text-primary"
+                    )}
+                    onPointerDown={(event) => {
+                      event.stopPropagation()
+                      if (busy || saving || event.button !== 0) return
+                      event.preventDefault()
+                      drag.current = null
+                      svg.current?.setPointerCapture(event.pointerId)
+                      updateConnection({
+                        source: node.id,
+                        x: point.x + CARD.nodeWidth + 8,
+                        y: point.y + CARD.nodeHeight / 2,
+                        target: null,
+                      })
+                    }}
+                    onKeyDown={(event) => {
+                      if (
+                        (event.key === "Enter" || event.key === " ") &&
+                        !busy &&
+                        !saving
+                      ) {
+                        event.preventDefault()
+                        updateConnection({
+                          source: node.id,
+                          x: point.x + CARD.nodeWidth + 48,
+                          y: point.y + CARD.nodeHeight / 2,
+                          target: null,
+                          keyboard: true,
+                        })
+                      }
+                    }}
+                  >
+                    <title>
+                      Arrastrá para indicar qué US bloquea {node.id}
+                    </title>
+                    <circle
+                      cx={point.x + CARD.nodeWidth + 8}
+                      cy={point.y + CARD.nodeHeight / 2}
+                      r={14}
+                      fill="transparent"
+                    />
+                    <circle
+                      cx={point.x + CARD.nodeWidth + 8}
+                      cy={point.y + CARD.nodeHeight / 2}
+                      r={5}
+                      fill="var(--background)"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    />
+                  </g>
+                )}
               </g>
             )
           })}

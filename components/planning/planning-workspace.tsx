@@ -263,6 +263,30 @@ function Workspace({ stageId }: { stageId: string }) {
       notify("No se pudo copiar el enlace", "error")
     }
   }
+  async function connectIssues(blocker: string, blocked: string) {
+    if (busy || data?.stage.archived) return
+    setBusy(true)
+    try {
+      await planningRequest(url, {
+        action: "dependency",
+        sourceId: blocker,
+        targetId: blocked,
+        direction: "blocks",
+        requestId: crypto.randomUUID(),
+      })
+      await refreshDetails()
+      notify(`${blocker} bloquea a ${blocked}`)
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "No se pudo crear la dependencia",
+        "error"
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
   async function membership(ids: string[], included: boolean) {
     if (!ids.length || busy) return
     setBusy(true)
@@ -905,6 +929,7 @@ function Workspace({ stageId }: { stageId: string }) {
           selected={selected}
           highlighted={highlighted}
           onSelect={select}
+          onConnect={connectIssues}
           onAdd={(id) => void membership([id], true)}
           busy={planning.busy}
           focusRequest={focusRequest}

@@ -1,5 +1,13 @@
 "use client"
 import { useEffect, useState } from "react"
+import { InfoIcon } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import {
   forecastPlan,
@@ -60,21 +68,21 @@ export function PlanCapacity({
   return (
     <section
       aria-label="Puntos y duración del plan"
-      className="border-b bg-background px-4 py-3"
+      className="flex h-9 shrink-0 items-center gap-2 border-b bg-background px-4"
     >
-      <div className="grid grid-cols-2 gap-x-6 gap-y-3 lg:grid-cols-4">
+      <div className="flex min-w-0 flex-1 items-center gap-5 overflow-x-auto whitespace-nowrap">
         <Metric
-          label="Puntos en el plan"
+          label="Plan"
           value={`${number(points.total)} pt`}
           detail={`${number(points.completed)} completados · ${incomplete ? "datos incompletos" : "solo US incluidas"}`}
         />
         <Metric
-          label="Trabajo pendiente"
+          label="Pendiente"
           value={`${number(points.remaining)} pt`}
           detail={`${points.unestimated} US pendientes sin estimar`}
         />
         <Metric
-          label="Velocidad del equipo"
+          label="Velocity"
           value={
             velocity?.averagePoints !== null && velocity
               ? `${number(velocity.averagePoints)} pt / ciclo`
@@ -91,7 +99,7 @@ export function PlanCapacity({
           }
         />
         <Metric
-          label={`Duración orientativa${forecast?.partial ? " · parcial" : ""}`}
+          label={`Duración${forecast?.partial ? " parcial" : ""}`}
           value={duration}
           detail={
             forecast && !missingEstimate && points.pendingCount
@@ -100,46 +108,74 @@ export function PlanCapacity({
           }
         />
       </div>
-      <details className="mt-2 text-[11px] text-muted-foreground">
-        <summary className="w-fit cursor-pointer">Cómo se calcula</summary>
-        <div className="mt-2 flex flex-col gap-1">
-          <p>
-            Puntos pendientes estimados ÷ promedio de puntos completados de los
-            últimos 5 ciclos cerrados. Las semanas usan la duración media de
-            esos ciclos. Los ciclos con 0 puntos también cuentan; si faltan
-            datos, no se supone una velocidad.
-          </p>
-          <p>
-            Supone dedicar la capacidad del equipo a este plan. No incluye US
-            sin estimar, sugerencias, trabajo de otros planes ni esperas por
-            bloqueos externos. No es una fecha de entrega.
-          </p>
-          <p>
-            El historial usa los puntos al cierre registrados por Linear; puede
-            reflejar convenciones de estimación anteriores. Las US canceladas y
-            las épicas no suman puntos al plan.
-          </p>
-          {velocity?.samples.map((sample) => (
-            <p key={sample.id}>
-              {sample.name}: {number(sample.completedPoints)} pt ·{" "}
-              {number(sample.days)} días
-            </p>
-          ))}
-          {error && (
+      <Dialog>
+        <DialogTrigger
+          render={
             <Button
               variant="ghost"
-              size="xs"
-              className="self-start"
-              onClick={() => {
-                setError(false)
-                setAttempt((n) => n + 1)
-              }}
-            >
-              Reintentar consulta de velocity
-            </Button>
-          )}
-        </div>
-      </details>
+              size="icon-xs"
+              aria-label="Cómo se calculan los puntos y la duración"
+              title="Cómo se calcula"
+            />
+          }
+        >
+          <InfoIcon />
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Puntos y duración del plan</DialogTitle>
+          </DialogHeader>
+          <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto text-xs text-muted-foreground">
+            <p>
+              {number(points.completed)} pt completados · {points.unestimated}{" "}
+              US pendientes sin estimar
+              {incomplete ? " · Datos incompletos" : ""}.
+            </p>
+            {forecast && !missingEstimate && points.pendingCount > 0 && (
+              <p>
+                Duración orientativa: {duration} · ≈{" "}
+                {durationNumber(forecast.days / 7)} semanas
+                {forecast.partial ? " (parcial: faltan US por estimar)" : ""}.
+              </p>
+            )}
+            <p>
+              Puntos pendientes estimados ÷ promedio de puntos completados de
+              los últimos 5 ciclos cerrados. Las semanas usan la duración media
+              de esos ciclos. Los ciclos con 0 puntos también cuentan; si faltan
+              datos, no se supone una velocidad.
+            </p>
+            <p>
+              Supone dedicar la capacidad del equipo a este plan. No incluye US
+              sin estimar, sugerencias, trabajo de otros planes ni esperas por
+              bloqueos externos. No es una fecha de entrega.
+            </p>
+            <p>
+              El historial usa los puntos al cierre registrados por Linear;
+              puede reflejar convenciones de estimación anteriores. Las US
+              canceladas y las épicas no suman puntos al plan.
+            </p>
+            {velocity?.samples.map((sample) => (
+              <p key={sample.id}>
+                {sample.name}: {number(sample.completedPoints)} pt ·{" "}
+                {number(sample.days)} días
+              </p>
+            ))}
+            {error && (
+              <Button
+                variant="ghost"
+                size="xs"
+                className="self-start"
+                onClick={() => {
+                  setError(false)
+                  setAttempt((n) => n + 1)
+                }}
+              >
+                Reintentar consulta de velocity
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }
@@ -153,10 +189,17 @@ function Metric({
   detail: string
 }) {
   return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-medium text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-sm font-semibold tabular-nums">{value}</p>
-      <p className="mt-0.5 text-[10px] text-muted-foreground">{detail}</p>
+    <div
+      className="flex shrink-0 items-baseline gap-1.5 text-[11px]"
+      title={detail}
+    >
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-semibold tabular-nums">{value}</span>
+      {label === "Pendiente" && (
+        <span className="text-muted-foreground">
+          · {detail.replace(" US pendientes sin estimar", " sin estimar")}
+        </span>
+      )}
     </div>
   )
 }
