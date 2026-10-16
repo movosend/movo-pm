@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { CycleGraph } from "@/components/graph/cycle-graph"
 import { fixture } from "./fixture"
 import type { Snapshot } from "@/lib/schema/snapshot"
@@ -15,7 +16,9 @@ function App() {
   }, [])
   return (
     <div style={{ height: "100dvh", overflow: "hidden" }}>
-      <CycleGraph snapshot={snapshot} />
+      <TooltipProvider>
+        <CycleGraph snapshot={snapshot} />
+      </TooltipProvider>
     </div>
   )
 }

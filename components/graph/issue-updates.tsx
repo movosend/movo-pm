@@ -15,6 +15,7 @@ import { Toaster, createToastManager } from "@/components/ui/toast"
 const UpdatesContext = createContext<{
   mutate: (id: string, input: IssueUpdateInput) => Promise<void>
   busy: Set<string>
+  notify: (message: string, type?: "success" | "error") => void
 } | null>(null)
 const LABELS: Record<string, string> = {
   stateId: "Estado actualizado",
@@ -114,7 +115,20 @@ export function IssueUpdatesProvider({ children }: { children: ReactNode }) {
     }
   }
   return (
-    <UpdatesContext.Provider value={{ mutate: run, busy }}>
+    <UpdatesContext.Provider
+      value={{
+        mutate: run,
+        busy,
+        notify: (message, type = "success") => {
+          manager.add({
+            id: "clipboard",
+            title: message,
+            type,
+            timeout: type === "error" ? 5000 : 2500,
+          })
+        },
+      }}
+    >
       <Toaster toastManager={manager} limit={8}>
         {children}
       </Toaster>

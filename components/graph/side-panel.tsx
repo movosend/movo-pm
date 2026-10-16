@@ -3,6 +3,12 @@
 import { useState, type ReactNode } from "react"
 import {
   ArrowLeftIcon,
+  ArrowRightIcon,
+  BanIcon,
+  ChevronRightIcon,
+  CircleDashedIcon,
+  PlayIcon,
+  UserRoundIcon,
   ExternalLinkIcon,
   FocusIcon,
   LinkIcon,
@@ -16,14 +22,6 @@ import { statusColorVar } from "@/components/graph/status-color"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card"
-import {
   Empty,
   EmptyHeader,
   EmptyTitle,
@@ -31,6 +29,7 @@ import {
 } from "@/components/ui/empty"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { cn } from "@/lib/utils"
 import type { Graph } from "@/lib/graph/build"
 import {
   walk,
@@ -192,7 +191,7 @@ type PanelProps = {
 export function SidePanel(props: PanelProps) {
   return (
     <ScrollArea className="h-full">
-      <div className="flex flex-col gap-6 p-5">
+      <div className="flex flex-col gap-5 p-4">
         {props.selected ? (
           <DetailView
             key={props.selected.id}
@@ -244,7 +243,7 @@ function DetailView({
         <span className="text-xs font-semibold text-muted-foreground">
           {node.id}
         </span>
-        <h2 className="text-lg leading-snug font-semibold tracking-tight">
+        <h2 className="text-[15px] leading-snug font-semibold tracking-tight">
           {node.title}
         </h2>
         <div className="flex flex-wrap gap-2">
@@ -456,13 +455,12 @@ function SummaryView({
           <ArrowLeftIcon data-icon="inline-start" />
           Volver al resumen
         </Button>
-        <h2 className="text-lg font-semibold">
-          {CONDITIONS[group]} · {groups[group].length}
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          Pendientes del ciclo completo. Seleccioná una issue para ver su
-          detalle y ubicarla en el grafo.
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold">{CONDITIONS[group]}</h2>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {groups[group].length} issues
+          </span>
+        </div>
         {groups[group].length ? (
           groups[group].map((node) => (
             <Row
@@ -482,45 +480,75 @@ function SummaryView({
         )}
       </>
     )
+  const actions = [
+    {
+      key: "blocked",
+      icon: BanIcon,
+      description: "Revisar qué impide avanzar",
+    },
+    { key: "ready", icon: PlayIcon, description: "Sin bloqueos pendientes" },
+    {
+      key: "unestimated",
+      icon: CircleDashedIcon,
+      description: "Completar la estimación",
+    },
+    {
+      key: "unassigned",
+      icon: UserRoundIcon,
+      description: "Asignar un responsable",
+    },
+  ] as const
   return (
     <>
       <div>
-        <h2 className="text-lg font-semibold">Acciones del ciclo</h2>
+        <h2 className="text-sm font-semibold">Acciones del ciclo</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Elegí qué revisar. Los conteos incluyen todas las pendientes del
-          ciclo.
+          Pendientes para revisar y destrabar.
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        {(Object.keys(CONDITIONS) as Condition[]).map((key) => (
-          <Card key={key} size="sm">
-            <CardHeader>
-              <CardTitle>{CONDITIONS[key]}</CardTitle>
-              <CardDescription>
-                {groups[key].length ? "Pendientes del ciclo" : "Sin pendientes"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <span className="text-3xl font-semibold tabular-nums">
+      <div className="flex flex-col">
+        {actions.map(({ key, icon: Icon, description }, index) => (
+          <div key={key}>
+            {index > 0 && <Separator />}
+            <button
+              type="button"
+              onClick={() => onGroup(key)}
+              aria-label={`Ver ${CONDITIONS[key].toLowerCase()}`}
+              className="group/action -mx-2 flex w-[calc(100%+1rem)] cursor-pointer items-center gap-3 rounded-md px-2 py-3 text-left outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Icon
+                className={cn(
+                  "size-4 shrink-0 text-muted-foreground",
+                  key === "blocked" &&
+                    groups[key].length > 0 &&
+                    "text-status-stop"
+                )}
+              />
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-[13px] font-medium">
+                  {CONDITIONS[key]}
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  {description}
+                </span>
+              </span>
+              <span
+                className={cn(
+                  "text-[13px] font-medium tabular-nums",
+                  !groups[key].length && "text-muted-foreground"
+                )}
+              >
                 {groups[key].length}
               </span>
-            </CardContent>
-            <CardFooter>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => onGroup(key)}
-                aria-label={`Ver ${CONDITIONS[key].toLowerCase()}`}
-              >
-                Ver issues
-              </Button>
-            </CardFooter>
-          </Card>
+              <ArrowRightIcon className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/action:opacity-100 group-focus-visible/action:opacity-100" />
+            </button>
+          </div>
         ))}
       </div>
-      <details className="group rounded-lg border p-3">
-        <summary className="cursor-pointer text-sm font-semibold">
+      <Separator />
+      <details className="group/risks">
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+          <ChevronRightIcon className="size-3.5 transition-transform group-open/risks:rotate-90" />
           Dependencias y riesgos
         </summary>
         <div className="mt-4 flex flex-col gap-5">
@@ -597,8 +625,9 @@ function SummaryView({
           </p>
         </div>
       </details>
-      <details className="rounded-lg border p-3">
-        <summary className="cursor-pointer text-sm font-semibold">
+      <details className="group/analysis">
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+          <ChevronRightIcon className="size-3.5 transition-transform group-open/analysis:rotate-90" />
           Análisis de IA
         </summary>
         <div className="mt-4 flex flex-col gap-3">
@@ -610,15 +639,24 @@ function SummaryView({
               </p>
               <p className="text-sm">{analysis.headline}</p>
               {analysis.decisions.map((decision, index) => (
-                <Card key={index} size="sm">
-                  <CardHeader>
-                    <CardTitle>{decision.title}</CardTitle>
-                    <CardDescription>Prioridad {decision.sev}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-xs leading-relaxed">{decision.body}</p>
-                  </CardContent>
-                  <CardFooter className="flex flex-wrap gap-1">
+                <section
+                  key={index}
+                  className="flex flex-col gap-2 border-l-2 pl-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <h4 className="text-xs font-semibold">{decision.title}</h4>
+                    <Badge
+                      variant={
+                        decision.sev === "alta" ? "destructive" : "secondary"
+                      }
+                    >
+                      {decision.sev}
+                    </Badge>
+                  </div>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {decision.body}
+                  </p>
+                  <div className="flex flex-wrap gap-1">
                     {decision.issues.map((id) => (
                       <Button
                         key={id}
@@ -631,8 +669,8 @@ function SummaryView({
                         {id}
                       </Button>
                     ))}
-                  </CardFooter>
-                </Card>
+                  </div>
+                </section>
               ))}
             </>
           ) : (

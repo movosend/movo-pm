@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation"
 import { RefreshCwIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip"
 
 export function SyncButton({ compact = false }: { compact?: boolean }) {
   const router = useRouter()
@@ -32,19 +37,22 @@ export function SyncButton({ compact = false }: { compact?: boolean }) {
   if (compact) {
     return (
       <div className="flex flex-col items-end gap-1">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleSync}
-          disabled={busy}
-          title="Sincronizar con Linear"
-        >
-          <RefreshCwIcon
-            data-icon="inline-start"
-            className={busy ? "animate-spin" : undefined}
-          />
-          Sincronizar
-        </Button>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleSync}
+                disabled={busy}
+                aria-label="Sincronizar con Linear"
+              />
+            }
+          >
+            <RefreshCwIcon className={busy ? "animate-spin" : undefined} />
+          </TooltipTrigger>
+          <TooltipContent>Sincronizar con Linear</TooltipContent>
+        </Tooltip>
         {error && <p className="text-xs text-destructive">{error}</p>}
       </div>
     )

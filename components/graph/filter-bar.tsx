@@ -1,7 +1,14 @@
 "use client"
 
 import { Menu } from "@base-ui/react/menu"
-import { FilterIcon, LinkIcon, XIcon } from "lucide-react"
+import {
+  ChevronDownIcon,
+  CircleDashedIcon,
+  FilterIcon,
+  UsersIcon,
+  XIcon,
+} from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -9,8 +16,11 @@ import {
   DropdownMenuContent,
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   CONDITIONS,
   emptyFilters,
@@ -20,161 +30,178 @@ import {
 } from "@/lib/graph/view-state"
 import type { TeamMember, TeamState } from "@/lib/schema/snapshot"
 
-export function FilterBar({
-  filters,
-  onChange,
-  members,
-  states,
-  count,
-  total,
-  onShare,
-}: {
+type FilterProps = {
   filters: Filters
   onChange: (filters: Filters) => void
   members: TeamMember[]
   states: TeamState[]
-  count: number
-  total: number
-  onShare: () => void
-}) {
-  function toggle(category: "assignees" | "states", id: string) {
+}
+export function FilterBar({ filters, onChange, members, states }: FilterProps) {
+  const count =
+    filters.assignees.length + filters.states.length + filters.conditions.length
+  function toggle(category: keyof Filters, id: string) {
+    const values: string[] = filters[category]
     onChange({
       ...filters,
-      [category]: filters[category].includes(id)
-        ? filters[category].filter((value) => value !== id)
-        : [...filters[category], id],
+      [category]: values.includes(id)
+        ? values.filter((value) => value !== id)
+        : [...values, id],
     })
   }
   return (
-    <div
-      className="flex flex-col gap-2 border-b px-4 py-2"
-      aria-label="Filtros de issues"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <FilterIcon
-          className="size-4 text-muted-foreground"
-          aria-hidden="true"
-        />
-        {(
-          [
-            {
-              key: "assignees",
-              label: "Responsable",
-              items: [
-                { id: "unassigned", name: "Sin responsable" },
-                ...members,
-              ],
-            },
-            { key: "states", label: "Estado", items: states },
-          ] as const
-        ).map(({ key, label, items }) => (
-          <DropdownMenu key={key}>
-            <DropdownMenuTrigger
-              render={<Button variant="outline" size="sm" />}
-            >
-              {label}
-              {filters[key].length ? ` (${filters[key].length})` : ""}
-            </DropdownMenuTrigger>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={<Button variant={count ? "outline" : "ghost"} size="sm" />}
+        aria-label={count ? `Filtros (${count} activos)` : "Filtros"}
+      >
+        <FilterIcon data-icon="inline-start" />
+        Filtros{count > 0 && <Badge variant="secondary">{count}</Badge>}
+        <ChevronDownIcon data-icon="inline-end" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <Menu.Group aria-label="Condiciones de issues">
+          <DropdownMenuLabel>Qué querés revisar</DropdownMenuLabel>
+          {(Object.entries(CONDITIONS) as [Condition, string][]).map(
+            ([key, label]) => (
+              <DropdownMenuCheckboxItem
+                key={key}
+                checked={filters.conditions.includes(key)}
+                onCheckedChange={() => toggle("conditions", key)}
+              >
+                {label}
+              </DropdownMenuCheckboxItem>
+            )
+          )}
+        </Menu.Group>
+        <DropdownMenuSeparator />
+        <Menu.Group aria-label="Filtrar por propiedades">
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <UsersIcon />
+              Responsable
+              {filters.assignees.length > 0 && (
+                <Badge variant="secondary">{filters.assignees.length}</Badge>
+              )}
+            </DropdownMenuSubTrigger>
             <DropdownMenuContent
+              side="right"
               align="start"
-              className="max-h-80 overflow-y-auto"
+              className="max-h-80 w-56 overflow-y-auto"
             >
-              <Menu.Group aria-label={label}>
-                <DropdownMenuLabel>{label}</DropdownMenuLabel>
-                {items.map((item) => (
+              <Menu.Group aria-label="Responsable">
+                <DropdownMenuLabel>Responsable</DropdownMenuLabel>
+                {[
+                  { id: "unassigned", name: "Sin responsable" },
+                  ...members,
+                ].map((member) => (
                   <DropdownMenuCheckboxItem
-                    key={item.id}
-                    checked={filters[key].includes(item.id)}
-                    onCheckedChange={() => toggle(key, item.id)}
+                    key={member.id}
+                    checked={filters.assignees.includes(member.id)}
+                    onCheckedChange={() => toggle("assignees", member.id)}
                   >
-                    {item.name}
+                    {member.name}
                   </DropdownMenuCheckboxItem>
                 ))}
               </Menu.Group>
             </DropdownMenuContent>
-          </DropdownMenu>
-        ))}
-        <ToggleGroup
-          multiple
-          variant="outline"
-          size="sm"
-          value={filters.conditions}
-          onValueChange={(value) =>
-            onChange({ ...filters, conditions: value as Condition[] })
+          </DropdownMenuSub>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <CircleDashedIcon />
+              Estado
+              {filters.states.length > 0 && (
+                <Badge variant="secondary">{filters.states.length}</Badge>
+              )}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuContent
+              side="right"
+              align="start"
+              className="max-h-80 w-56 overflow-y-auto"
+            >
+              <Menu.Group aria-label="Estado">
+                <DropdownMenuLabel>Estado</DropdownMenuLabel>
+                {states.map((state) => (
+                  <DropdownMenuCheckboxItem
+                    key={state.id}
+                    checked={filters.states.includes(state.id)}
+                    onCheckedChange={() => toggle("states", state.id)}
+                  >
+                    {state.name}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </Menu.Group>
+            </DropdownMenuContent>
+          </DropdownMenuSub>
+        </Menu.Group>
+        {hasFilters(filters) && (
+          <>
+            <DropdownMenuSeparator />
+            <Menu.Group>
+              <DropdownMenuItem onClick={() => onChange(emptyFilters())}>
+                <XIcon className="size-4" />
+                Limpiar filtros
+              </DropdownMenuItem>
+            </Menu.Group>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+export function ActiveFilters({
+  filters,
+  onChange,
+  members,
+  states,
+}: FilterProps) {
+  if (!hasFilters(filters)) return null
+  const items = [
+    ...filters.assignees.map((id) => ({
+      id,
+      key: "assignees" as const,
+      label: `Responsable: ${id === "unassigned" ? "Sin asignar" : (members.find((member) => member.id === id)?.name ?? id)}`,
+    })),
+    ...filters.states.map((id) => ({
+      id,
+      key: "states" as const,
+      label: `Estado: ${states.find((state) => state.id === id)?.name ?? id}`,
+    })),
+    ...filters.conditions.map((id) => ({
+      id,
+      key: "conditions" as const,
+      label: CONDITIONS[id],
+    })),
+  ]
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1.5 border-b bg-muted/20 px-4 py-2"
+      aria-label="Filtros activos"
+    >
+      <span className="mr-1 text-xs text-muted-foreground">Filtrando por</span>
+      {items.map(({ id, key, label }) => (
+        <Button
+          key={`${key}-${id}`}
+          variant="secondary"
+          size="xs"
+          aria-label={`Quitar filtro ${label}`}
+          onClick={() =>
+            onChange({
+              ...filters,
+              [key]: filters[key].filter((value) => value !== id),
+            })
           }
-          aria-label="Condiciones de issues"
         >
-          {(Object.entries(CONDITIONS) as [Condition, string][]).map(
-            ([key, label]) => (
-              <ToggleGroupItem key={key} value={key}>
-                {label}
-              </ToggleGroupItem>
-            )
-          )}
-        </ToggleGroup>
-        <span className="text-xs text-muted-foreground" role="status">
-          {count} de {total} issues
-        </span>
-        <Button variant="ghost" size="sm" className="ml-auto" onClick={onShare}>
-          <LinkIcon data-icon="inline-start" />
-          Compartir vista
+          {label}
+          <XIcon data-icon="inline-end" />
         </Button>
-      </div>
-      {hasFilters(filters) && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {filters.assignees.map((id) => (
-            <Button
-              key={id}
-              variant="secondary"
-              size="xs"
-              onClick={() => toggle("assignees", id)}
-              aria-label={`Quitar filtro ${members.find((member) => member.id === id)?.name ?? "Sin responsable"}`}
-            >
-              {members.find((member) => member.id === id)?.name ??
-                "Sin responsable"}
-              <XIcon data-icon="inline-end" />
-            </Button>
-          ))}
-          {filters.states.map((id) => (
-            <Button
-              key={id}
-              variant="secondary"
-              size="xs"
-              onClick={() => toggle("states", id)}
-              aria-label={`Quitar filtro ${states.find((state) => state.id === id)?.name ?? id}`}
-            >
-              {states.find((state) => state.id === id)?.name ?? id}
-              <XIcon data-icon="inline-end" />
-            </Button>
-          ))}
-          {filters.conditions.map((key) => (
-            <Button
-              key={key}
-              variant="secondary"
-              size="xs"
-              onClick={() =>
-                onChange({
-                  ...filters,
-                  conditions: filters.conditions.filter(
-                    (condition) => condition !== key
-                  ),
-                })
-              }
-              aria-label={`Quitar filtro ${CONDITIONS[key]}`}
-            >
-              {CONDITIONS[key]}
-              <XIcon data-icon="inline-end" />
-            </Button>
-          ))}
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => onChange(emptyFilters())}
-          >
-            Limpiar filtros
-          </Button>
-        </div>
-      )}
+      ))}
+      <Button
+        variant="ghost"
+        size="xs"
+        onClick={() => onChange(emptyFilters())}
+      >
+        Limpiar
+      </Button>
     </div>
   )
 }

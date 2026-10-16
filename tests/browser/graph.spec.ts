@@ -100,6 +100,12 @@ async function mockUpdates(
   return requests
 }
 
+async function filterCondition(page: Page, name: string) {
+  await page.getByRole("button", { name: /^Filtros/ }).click()
+  await page.getByRole("menuitemcheckbox", { name, exact: true }).click()
+  await page.keyboard.press("Escape")
+}
+
 test("combines filters without moving nodes and restores URL with back/forward", async ({
   page,
 }) => {
@@ -107,10 +113,12 @@ test("combines filters without moving nodes and restores URL with back/forward",
   const node = page.locator('[data-node-id="MOVO-1"]')
   await expect(node).toBeVisible()
   const original = await node.getAttribute("transform")
-  await page.getByRole("button", { name: "Responsable", exact: true }).click()
+  await page.getByRole("button", { name: /^Filtros/ }).click()
+  await page.getByRole("menuitem", { name: "Responsable", exact: true }).click()
   await page.getByRole("menuitemcheckbox", { name: "Ana", exact: true }).click()
   await page.keyboard.press("Escape")
-  await page.getByRole("button", { name: "Bloqueadas", exact: true }).click()
+  await page.keyboard.press("Escape")
+  await filterCondition(page, "Bloqueadas")
   await expect(
     page.getByRole("status").filter({ hasText: "1 de 5 issues" })
   ).toBeVisible()
@@ -120,7 +128,7 @@ test("combines filters without moving nodes and restores URL with back/forward",
     "0.14"
   )
   const shared = page.url()
-  await page.getByRole("button", { name: "Sin estimar", exact: true }).click()
+  await filterCondition(page, "Sin estimar")
   await expect(page.getByText("No hay issues que coincidan.")).toBeVisible()
   await page.goBack()
   await expect(page).toHaveURL(shared)
@@ -134,7 +142,7 @@ test("combines filters without moving nodes and restores URL with back/forward",
     .first()
     .click()
   await expect(
-    page.getByRole("status").filter({ hasText: "5 de 5 issues" })
+    page.getByRole("status").filter({ hasText: "5 issues" })
   ).toBeVisible()
 })
 
@@ -146,7 +154,7 @@ test("summary actions open a list, focus issues and render safe Markdown", async
     .getByRole("button", { name: "Ver bloqueadas", exact: true })
     .click()
   await expect(
-    page.getByRole("heading", { name: "Bloqueadas · 2", exact: true })
+    page.getByRole("heading", { name: "Bloqueadas", exact: true })
   ).toBeVisible()
   await page
     .getByRole("button", { name: /Transferencias internacionales MOVO-1/ })
@@ -200,7 +208,7 @@ test("search focuses a standalone issue and copied links restore issue plus filt
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"])
   await page.goto("/?condition=ready")
-  await page.getByRole("button", { name: /Agregar issue/ }).click()
+  await page.getByRole("button", { name: /Buscar issues/ }).click()
   await page
     .getByPlaceholder("Buscar por título o código (ej. MOVO-123)…")
     .fill("MOVO-3")

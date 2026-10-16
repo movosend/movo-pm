@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
-import { CheckIcon } from "lucide-react"
+import { CheckIcon, ChevronRightIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -34,7 +34,7 @@ function DropdownMenuContent({
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
           className={cn(
-            "min-w-[10rem] origin-[var(--transform-origin)] rounded-lg border bg-popover bg-clip-padding p-1 text-sm text-popover-foreground shadow-lg outline-none transition-[transform,opacity] duration-150 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0",
+            "min-w-[10rem] origin-[var(--transform-origin)] rounded-lg border bg-popover bg-clip-padding p-1 text-sm text-popover-foreground shadow-lg transition-[transform,opacity] duration-150 outline-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0",
             className
           )}
           {...props}
@@ -54,7 +54,7 @@ function DropdownMenuItem({
       data-slot="dropdown-menu-item"
       data-variant={variant}
       className={cn(
-        "flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none data-highlighted:bg-muted data-highlighted:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50 data-[variant=destructive]:text-destructive data-[variant=destructive]:data-highlighted:bg-destructive/10",
+        "flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none data-highlighted:bg-muted data-highlighted:text-foreground data-[variant=destructive]:text-destructive data-[variant=destructive]:data-highlighted:bg-destructive/10 data-disabled:pointer-events-none data-disabled:opacity-50",
         className
       )}
       {...props}
@@ -73,7 +73,7 @@ function DropdownMenuCheckboxItem({
       data-slot="dropdown-menu-checkbox-item"
       checked={checked}
       className={cn(
-        "flex cursor-default items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-sm outline-none select-none data-highlighted:bg-muted data-highlighted:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
+        "relative flex cursor-default items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-sm outline-none select-none data-highlighted:bg-muted data-highlighted:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
         className
       )}
       {...props}
@@ -114,8 +114,32 @@ function DropdownMenuSeparator({
   )
 }
 
+function DropdownMenuSub({ ...props }: MenuPrimitive.SubmenuRoot.Props) {
+  return <MenuPrimitive.SubmenuRoot {...props} />
+}
+function DropdownMenuSubTrigger({
+  children,
+  className,
+  ...props
+}: MenuPrimitive.SubmenuTrigger.Props) {
+  return (
+    <MenuPrimitive.SubmenuTrigger
+      className={cn(
+        "flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none data-highlighted:bg-muted data-open:bg-muted [&>svg]:size-4 [&>svg]:text-muted-foreground",
+        className
+      )}
+      {...props}
+    >
+      {children}
+      <ChevronRightIcon className="ml-auto" />
+    </MenuPrimitive.SubmenuTrigger>
+  )
+}
+
 export {
   DropdownMenu,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,

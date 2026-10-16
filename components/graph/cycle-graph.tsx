@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useGraphLocation } from "@/hooks/use-graph-location"
-import { FilterBar } from "@/components/graph/filter-bar"
+import { FilterBar, ActiveFilters } from "@/components/graph/filter-bar"
 import {
   IssueUpdatesProvider,
   useIssueUpdates,
@@ -22,7 +22,6 @@ import {
   type Filters,
   type Visibility,
 } from "@/lib/graph/view-state"
-import { PanelRightCloseIcon, PanelRightOpenIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 import { CycleHeader } from "@/components/graph/cycle-header"
@@ -116,12 +115,11 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
   const active = location.active
   const filters = location.filters
   const filtering = hasFilters(filters)
-  const { mutate } = useIssueUpdates()
+  const { mutate, notify } = useIssueUpdates()
   const [mobilePanelOpen, setMobilePanelOpen] = useState<boolean | null>(null)
   const [group, setGroup] = useState<Condition | null>(null)
-  const [panelWidth, setPanelWidth] = useState(440)
+  const [panelWidth, setPanelWidth] = useState(360)
   const [containerWidth, setContainerWidth] = useState(1200)
-  const [shareMessage, setShareMessage] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const mobile = containerWidth < 768
   function setSelected(id: string | null) {
@@ -306,10 +304,11 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
       const url = new URL(window.location.href)
       url.search = params.toString()
       await navigator.clipboard.writeText(url.toString())
-      setShareMessage("Enlace copiado.")
+      notify("Enlace copiado")
     } catch {
-      setShareMessage(
-        "No se pudo copiar el enlace. Podés copiar la dirección del navegador."
+      notify(
+        "No se pudo copiar el enlace. Copiá la dirección del navegador.",
+        "error"
       )
     }
   }
@@ -527,12 +526,14 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
         onOpenUserPalette={() => setUserPaletteOpen(true)}
         highlightedUserName={highlightedMember?.name}
         onClearHighlight={() => setHighlightedUserId(null)}
-      />
-      <FilterBar
-        filters={filters}
-        onChange={setFilters}
-        members={snapshot.members ?? []}
-        states={snapshot.states ?? []}
+        filters={
+          <FilterBar
+            filters={filters}
+            onChange={setFilters}
+            members={snapshot.members ?? []}
+            states={snapshot.states ?? []}
+          />
+        }
         count={matchingIds.size}
         total={
           snapshot.nodes.filter((node) => node.inCycle || showOutside).length
@@ -540,6 +541,18 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
         onShare={() => {
           void share(false)
         }}
+        panelOpen={mobile ? (mobilePanelOpen ?? Boolean(selected)) : panelOpen}
+        onTogglePanel={() => {
+          if (mobile)
+            setMobilePanelOpen(!(mobilePanelOpen ?? Boolean(selected)))
+          else setPanelOpen((open) => !open)
+        }}
+      />
+      <ActiveFilters
+        filters={filters}
+        onChange={setFilters}
+        members={snapshot.members ?? []}
+        states={snapshot.states ?? []}
       />
       {location.cycle && location.cycle !== snapshot.cycle.id && (
         <Alert>
@@ -582,11 +595,6 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
             </Button>
           </AlertDescription>
         </Alert>
-      )}
-      {shareMessage && (
-        <p role="status" className="px-4 py-1 text-xs text-muted-foreground">
-          {shareMessage}
-        </p>
       )}
       <EmptyCycleError cycles={cycles} />
       <div className="flex min-h-0 flex-1">
@@ -941,45 +949,21 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
           </svg>
           <StatusLegend />
         </div>
-        <div className="shrink-0 border-l p-1">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={
-              (mobile ? (mobilePanelOpen ?? Boolean(selected)) : panelOpen)
-                ? "Colapsar panel de resumen"
-                : "Expandir panel de resumen"
-            }
-            aria-expanded={
-              mobile ? (mobilePanelOpen ?? Boolean(selected)) : panelOpen
-            }
-            aria-controls={
-              mobile ? "mobile-cycle-side-panel" : "cycle-side-panel"
-            }
-            onClick={() => {
-              if (mobile)
-                setMobilePanelOpen(!(mobilePanelOpen ?? Boolean(selected)))
-              else setPanelOpen((open) => !open)
-            }}
-          >
-            {(mobile ? (mobilePanelOpen ?? Boolean(selected)) : panelOpen) ? (
-              <PanelRightCloseIcon />
-            ) : (
-              <PanelRightOpenIcon />
-            )}
-          </Button>
-        </div>
         {panelOpen && !mobile && (
-          <>
+          <aside
+            id="cycle-side-panel"
+            style={{ width: Math.min(panelWidth, containerWidth * 0.6) }}
+            className="relative min-h-0 shrink-0 border-l bg-background"
+          >
             <div
               role="separator"
               aria-label="Ancho del panel"
               aria-orientation="vertical"
               tabIndex={0}
-              aria-valuemin={356}
+              aria-valuemin={320}
               aria-valuemax={Math.floor(containerWidth * 0.6)}
               aria-valuenow={Math.min(panelWidth, containerWidth * 0.6)}
-              className="w-1.5 shrink-0 cursor-col-resize touch-none bg-border/40 hover:bg-primary/30 focus-visible:bg-primary/30"
+              className="absolute inset-y-0 -left-1 w-2 cursor-col-resize touch-none outline-none after:absolute after:inset-y-0 after:left-1 after:w-px after:bg-transparent hover:after:bg-ring focus-visible:after:bg-ring"
               onKeyDown={(event) => {
                 event.stopPropagation()
                 if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
@@ -988,7 +972,7 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
                     Math.min(
                       containerWidth * 0.6,
                       Math.max(
-                        356,
+                        320,
                         width + (event.key === "ArrowLeft" ? 24 : -24)
                       )
                     )
@@ -1005,7 +989,7 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
                   setPanelWidth(
                     Math.min(
                       containerWidth * 0.6,
-                      Math.max(356, right - event.clientX)
+                      Math.max(320, right - event.clientX)
                     )
                   )
                 }
@@ -1015,14 +999,8 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
                   event.currentTarget.releasePointerCapture(event.pointerId)
               }}
             />
-            <aside
-              id="cycle-side-panel"
-              style={{ width: Math.min(panelWidth, containerWidth * 0.6) }}
-              className="min-h-0 shrink-0 overflow-hidden border-l"
-            >
-              {panel}
-            </aside>
-          </>
+            {panel}
+          </aside>
         )}
         {mobile && (
           <Sheet
