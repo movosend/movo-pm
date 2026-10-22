@@ -1,6 +1,6 @@
 "use server"
 
-import { and, eq, notInArray } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db/client"
 import {
@@ -48,23 +48,35 @@ export async function inviteWorkspaceMember(formData: FormData) {
   revalidatePath("/settings/workspaces")
 }
 
-export async function updateWorkspaceMember(formData: FormData) {
+export async function setMemberWorkspaceAccess(
+  emailValue: string,
+  workspaceId: string,
+  enabled: boolean
+) {
   await requireAdmin()
-  const { email, workspaceIds } = await memberAccessInput(formData)
-  if (workspaceIds.length)
+  const email = emailValue.trim().toLowerCase()
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+    throw new Error("Correo inválido.")
+  const [workspace] = await db
+    .select({ id: linearWorkspaces.id })
+    .from(linearWorkspaces)
+    .where(eq(linearWorkspaces.id, workspaceId))
+    .limit(1)
+  if (!workspace) throw new Error("Workspace no disponible.")
+
+  if (enabled)
     await db
       .insert(workspaceMembers)
-      .values(workspaceIds.map((workspaceId) => ({ workspaceId, email })))
+      .values({ workspaceId, email })
       .onConflictDoNothing()
-  await db
-    .delete(workspaceMembers)
-    .where(
-      workspaceIds.length
-        ? and(
-            eq(workspaceMembers.email, email),
-            notInArray(workspaceMembers.workspaceId, workspaceIds)
-          )
-        : eq(workspaceMembers.email, email)
-    )
+  else
+    await db
+      .delete(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.email, email)
+        )
+      )
   revalidatePath("/settings/workspaces")
 }

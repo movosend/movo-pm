@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { PlusIcon, UserPlusIcon } from "lucide-react"
+import { PlusIcon } from "lucide-react"
 
 import { auth } from "@/auth"
 import { WorkspaceAvatar } from "@/components/workspace-avatar"
@@ -12,16 +12,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Field,
-  FieldGroup,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { Separator } from "@/components/ui/separator"
 import { db } from "@/lib/db/client"
 import {
   linearTeams,
@@ -30,52 +20,9 @@ import {
 } from "@/lib/db/schema"
 import { isAdmin } from "@/lib/workspaces/access"
 
-import {
-  inviteWorkspaceMember,
-  setTeamEnabled,
-  updateWorkspaceMember,
-} from "./actions"
-
-type Workspace = typeof linearWorkspaces.$inferSelect
-
-function WorkspaceChoices({
-  workspaces,
-  selectedIds,
-  prefix,
-}: {
-  workspaces: Workspace[]
-  selectedIds: Set<string>
-  prefix: string
-}) {
-  return (
-    <FieldSet>
-      <FieldLegend variant="label">Workspaces permitidos</FieldLegend>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {workspaces.map((workspace) => {
-          const id = `${prefix}-${workspace.id}`
-          return (
-            <Field key={workspace.id} orientation="horizontal">
-              <Checkbox
-                id={id}
-                name="workspaceId"
-                value={workspace.id}
-                defaultChecked={selectedIds.has(workspace.id)}
-              />
-              <FieldLabel htmlFor={id} className="flex items-center gap-2">
-                <WorkspaceAvatar
-                  name={workspace.name}
-                  logoUrl={workspace.logoUrl}
-                  small
-                />
-                {workspace.name}
-              </FieldLabel>
-            </Field>
-          )
-        })}
-      </div>
-    </FieldSet>
-  )
-}
+import { setTeamEnabled } from "./actions"
+import { InviteMemberForm } from "./invite-form"
+import { MemberAccessList } from "./member-access-list"
 
 export default async function WorkspacesSettingsPage() {
   if (!isAdmin((await auth())?.user?.id)) return null
@@ -85,7 +32,19 @@ export default async function WorkspacesSettingsPage() {
     db.select().from(linearTeams),
     db.select().from(workspaceMembers),
   ])
-  const members = [...new Set(memberships.map((member) => member.email))].sort()
+  const workspaceChoices = workspaces.map(({ id, name, logoUrl }) => ({
+    id,
+    name,
+    logoUrl,
+  }))
+  const members = [...new Set(memberships.map((member) => member.email))]
+    .sort()
+    .map((email) => ({
+      email,
+      workspaceIds: memberships
+        .filter((member) => member.email === email)
+        .map((member) => member.workspaceId),
+    }))
 
   return (
     <div className="h-full overflow-y-auto">
@@ -198,38 +157,7 @@ export default async function WorkspacesSettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form
-                  action={inviteWorkspaceMember}
-                  className="flex flex-col gap-5"
-                >
-                  <FieldGroup>
-                    <Field>
-                      <FieldLabel htmlFor="invite-email">
-                        Correo de GitHub
-                      </FieldLabel>
-                      <Input
-                        id="invite-email"
-                        type="email"
-                        name="email"
-                        placeholder="persona@empresa.com"
-                        required
-                      />
-                    </Field>
-                    <WorkspaceChoices
-                      workspaces={workspaces}
-                      selectedIds={
-                        new Set(
-                          workspaces.length === 1 ? [workspaces[0].id] : []
-                        )
-                      }
-                      prefix="invite"
-                    />
-                  </FieldGroup>
-                  <Button type="submit" disabled={!workspaces.length}>
-                    <UserPlusIcon data-icon="inline-start" />
-                    Invitar persona
-                  </Button>
-                </form>
+                <InviteMemberForm workspaces={workspaceChoices} />
               </CardContent>
             </Card>
 
@@ -237,49 +165,15 @@ export default async function WorkspacesSettingsPage() {
               <CardHeader>
                 <CardTitle>Acceso actual</CardTitle>
                 <CardDescription>
-                  Marcá los workspaces de cada persona y guardá. Para quitarle
-                  todo el acceso, desmarcá todos.
+                  Elegí los workspaces de cada persona. Los cambios se guardan
+                  automáticamente.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {members.length ? (
-                  <div className="flex flex-col">
-                    {members.map((email, index) => (
-                      <div key={email}>
-                        {index > 0 && <Separator className="my-5" />}
-                        <form
-                          action={updateWorkspaceMember}
-                          className="flex flex-col gap-4"
-                        >
-                          <input type="hidden" name="email" value={email} />
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <p className="min-w-0 text-sm font-medium break-all">
-                              {email}
-                            </p>
-                            <Button type="submit" size="sm" variant="outline">
-                              Guardar cambios
-                            </Button>
-                          </div>
-                          <WorkspaceChoices
-                            workspaces={workspaces}
-                            selectedIds={
-                              new Set(
-                                memberships
-                                  .filter((member) => member.email === email)
-                                  .map((member) => member.workspaceId)
-                              )
-                            }
-                            prefix={`member-${index}`}
-                          />
-                        </form>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Todavía no hay personas invitadas.
-                  </p>
-                )}
+                <MemberAccessList
+                  members={members}
+                  workspaces={workspaceChoices}
+                />
               </CardContent>
             </Card>
           </div>

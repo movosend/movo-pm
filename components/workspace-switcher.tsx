@@ -38,7 +38,7 @@ export function WorkspaceSwitcher({
     .find((item) =>
       pathname.startsWith(workspacePath(item.workspace.id, item.team.id))
     )
-  if (!workspaces.some((item) => item.teams.length)) return null
+  if (!workspaces.length) return null
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
@@ -57,31 +57,34 @@ export function WorkspaceSwitcher({
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        {workspaces
-          .filter((item) => item.teams.length)
-          .map((item) => (
-            <div key={item.workspace.id}>
-              <DropdownMenuLabel className="flex items-center gap-2">
-                <WorkspaceAvatar
-                  name={item.workspace.name}
-                  logoUrl={item.workspace.logoUrl}
-                  small
-                />
-                {item.workspace.name}
-              </DropdownMenuLabel>
-              {item.teams.map((team) => (
-                <DropdownMenuItem
-                  key={team.id}
-                  render={
-                    <Link href={workspacePath(item.workspace.id, team.id)} />
-                  }
-                  nativeButton={false}
-                >
-                  {team.name} ({team.key})
-                </DropdownMenuItem>
-              ))}
-            </div>
-          ))}
+        {workspaces.map((item) => (
+          <div key={item.workspace.id}>
+            <DropdownMenuLabel className="flex items-center gap-2">
+              <WorkspaceAvatar
+                name={item.workspace.name}
+                logoUrl={item.workspace.logoUrl}
+                small
+              />
+              {item.workspace.name}
+            </DropdownMenuLabel>
+            {item.teams.map((team) => (
+              <DropdownMenuItem
+                key={team.id}
+                render={
+                  <Link href={workspacePath(item.workspace.id, team.id)} />
+                }
+                nativeButton={false}
+              >
+                {team.name} ({team.key})
+              </DropdownMenuItem>
+            ))}
+            {!item.teams.length && (
+              <DropdownMenuItem disabled>
+                Sin equipos habilitados
+              </DropdownMenuItem>
+            )}
+          </div>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   )

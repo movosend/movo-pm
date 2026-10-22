@@ -119,6 +119,7 @@ export async function GET(request: NextRequest) {
           linearTeamId: team.id,
           key: team.key,
           name: team.name,
+          enabled: true,
         })
     }
     const response = NextResponse.redirect(

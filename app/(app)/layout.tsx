@@ -22,7 +22,11 @@ export default async function AppLayout({
   return (
     <div className="flex h-svh flex-col overflow-hidden">
       <header className="flex flex-wrap items-center gap-3 border-b px-4 py-3">
-        <div className="flex items-center gap-2">
+        <Link
+          href="/"
+          aria-label="Ir al inicio"
+          className="flex items-center gap-2"
+        >
           <Image
             src="/logo.png"
             alt=""
@@ -33,7 +37,7 @@ export default async function AppLayout({
           <span className="hidden text-sm font-medium sm:inline">
             Movo Project Manager
           </span>
-        </div>
+        </Link>
         <WorkspaceSwitcher workspaces={workspaces} />
         <AppNavigation />
         <div className="ml-auto flex items-center gap-3">
