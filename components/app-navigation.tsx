@@ -14,6 +14,7 @@ export function AppNavigation() {
       {[
         { href: base, label: "Ciclo actual" },
         { href: `${base}/planning`, label: "Planificación" },
+        { href: `${base}/issues`, label: "Todos los issues" },
       ].map((item) => {
         const active =
           item.href === base

@@ -41,7 +41,7 @@ export function WorkspaceSwitcher({
   if (!workspaces.length) return null
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
         {current && (
           <WorkspaceAvatar
             name={current.workspace.name}

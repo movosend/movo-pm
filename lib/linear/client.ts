@@ -17,6 +17,7 @@ import {
   ISSUE_DETAIL_QUERY,
   ISSUE_UPDATE_MUTATION,
   TEAM_ID_QUERY,
+  TEAM_ISSUES_QUERY,
 } from "@/lib/linear/query"
 import {
   fromLinearResponse,
@@ -24,6 +25,7 @@ import {
   fromIssueDetailResponse,
 } from "@/lib/linear/normalize"
 import type { IssueDetail, SearchIssue, Snapshot } from "@/lib/schema/snapshot"
+import type { TeamIssuePage } from "@/lib/schema/team-issues"
 
 import type { IssueUpdateInput, IssueValues } from "@/lib/schema/issue-update"
 export type { IssueUpdateInput } from "@/lib/schema/issue-update"
@@ -48,6 +50,7 @@ export interface LinearSource {
   getIssueValues(id: string): Promise<IssueValues>
   updateIssue(id: string, input: IssueUpdateInput): Promise<void>
   searchIssues(term: string): Promise<SearchIssue[]>
+  getTeamIssuesPage(after?: string): Promise<TeamIssuePage>
 }
 
 const LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql"
@@ -348,6 +351,19 @@ class LinearApiKeySource implements LinearSource {
     const teamId = await this.resolveTeamId()
     const json = await this.request(ISSUE_SEARCH_QUERY, { term, teamId })
     return fromSearchResponse(json)
+  }
+
+  async getTeamIssuesPage(after?: string): Promise<TeamIssuePage> {
+    const json = await this.request(TEAM_ISSUES_QUERY, {
+      teamKey: this.teamKey,
+      after: after ?? null,
+    })
+    const page = json.data?.teams?.nodes?.[0]?.issues
+    if (!page) throw new Error("No encontré los issues del equipo.")
+    return {
+      issues: page.nodes,
+      nextCursor: page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null,
+    }
   }
 }
 

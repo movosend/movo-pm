@@ -117,6 +117,27 @@ export const TEAM_ID_QUERY = `query TeamId($teamKey: String!) {
   }
 }`
 
+export const TEAM_ISSUES_QUERY = `query TeamIssues($teamKey: String!, $after: String) {
+  teams(filter: { key: { eq: $teamKey } }, first: 1) {
+    nodes {
+      issues(first: 100, after: $after, orderBy: updatedAt, includeArchived: true) {
+        nodes {
+          id
+          identifier
+          title
+          url
+          updatedAt
+          archivedAt
+          state { name type }
+          assignee { displayName }
+          cycle { name number }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}`
+
 /**
  * `issueSearch` is deprecated by Linear in favor of `searchIssues`, which
  * (unlike a plain title `containsIgnoreCase` filter) also matches on the
