@@ -149,6 +149,7 @@ export const ISSUE_DETAIL_QUERY = `query IssueDetail($id: String!, $childrenAfte
   issue(id: $id) {
     ...Lite
     team {
+      key
       states(first: 50) { nodes { id name type position } }
       members(first: 50) { nodes { id displayName } }
     }

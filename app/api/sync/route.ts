@@ -2,8 +2,9 @@ import { NextResponse } from "next/server"
 
 import { auth } from "@/auth"
 import { runSync } from "@/lib/sync/run-sync"
+import { scopedHandler } from "@/lib/workspaces/api"
 
-export async function POST() {
+async function handlePOST() {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
@@ -17,3 +18,4 @@ export async function POST() {
     return NextResponse.json({ error: message }, { status: 502 })
   }
 }
+export const POST = scopedHandler(handlePOST)

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { getLinearSource } from "@/lib/linear/client"
+import { scopedHandler } from "@/lib/workspaces/api"
 
-export async function GET(
+async function handleGET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -26,3 +27,4 @@ export async function GET(
     )
   }
 }
+export const GET = scopedHandler(handleGET)

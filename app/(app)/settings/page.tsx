@@ -9,7 +9,10 @@ export const metadata: Metadata = {
   title: "Settings",
 }
 
-export default function SettingsPage() {
+import { requireAdmin } from "@/lib/workspaces/access"
+
+export default async function SettingsPage() {
+  await requireAdmin()
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-4 overflow-y-auto p-6">
       <Button
@@ -23,16 +26,16 @@ export default function SettingsPage() {
         Volver
       </Button>
 
-      <Link href="/settings/users">
+      <Link href="/settings/workspaces">
         <Card className="transition-colors hover:bg-muted/50">
           <CardContent className="flex items-center gap-3">
             <UsersIcon className="size-5 shrink-0 text-muted-foreground" />
             <div>
               <div className="font-heading text-base font-medium">
-                Usuarios autorizados
+                Workspaces e invitados
               </div>
               <div className="text-sm text-muted-foreground">
-                Gestioná qué correos pueden iniciar sesión
+                Conectá Linear, habilitá equipos y gestioná invitados
               </div>
             </div>
           </CardContent>

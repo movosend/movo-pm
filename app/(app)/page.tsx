@@ -1,47 +1,17 @@
-import type { Metadata } from "next"
+import Link from "next/link"
+import { redirect } from "next/navigation"
+import { listAccessibleTeams, isAdmin } from "@/lib/workspaces/access"
+import { workspacePath } from "@/lib/workspaces/routes"
+import { auth } from "@/auth"
 
-import { CycleGraph } from "@/components/graph/cycle-graph"
-import { SyncButton } from "@/components/graph/sync-button"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty"
-import { getLatestSnapshot } from "@/lib/db/queries"
-import { getLinearSource } from "@/lib/linear/client"
-import type { Snapshot } from "@/lib/schema/snapshot"
-
-export const metadata: Metadata = {
-  title: "Dashboard",
-}
-
-export default async function Page() {
-  const row = await getLatestSnapshot(process.env.LINEAR_TEAM_KEY!)
-
-  if (!row) {
-    return (
-      <div className="flex h-full items-center justify-center p-6">
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>Todavía no hay datos</EmptyTitle>
-            <EmptyDescription>
-              Sincronizá con Linear para traer el ciclo activo.
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <SyncButton />
-          </EmptyContent>
-        </Empty>
-      </div>
-    )
-  }
-
-  const stored = row.payload as Snapshot
-  // Old snapshots lack the work/epic classification. Resolve it before enabling work actions.
-  const snapshot = stored.nodes.some((node) => node.isEpic === undefined)
-    ? await getLinearSource().getActiveCycleSnapshot()
-    : stored
-  return <CycleGraph snapshot={snapshot} />
+export default async function HomePage() {
+  const workspaces = await listAccessibleTeams()
+  const first = workspaces.flatMap((item) => item.teams.map((team) => ({ workspaceId: item.workspace.id, teamId: team.id })))[0]
+  if (first) redirect(workspacePath(first.workspaceId, first.teamId))
+  const admin = isAdmin((await auth())?.user?.id)
+  return <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+    <h1 className="text-lg font-semibold">Todavía no hay equipos disponibles</h1>
+    <p className="text-sm text-muted-foreground">{admin ? "Conectá un workspace y habilitá un equipo." : "Un administrador debe invitarte y habilitar un equipo."}</p>
+    {admin && <Link href="/settings/workspaces" className="text-sm underline">Administrar workspaces</Link>}
+  </div>
 }

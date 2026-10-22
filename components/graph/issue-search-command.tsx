@@ -1,4 +1,5 @@
 "use client"
+import { scopedApiUrl } from "@/lib/workspaces/routes"
 
 import { useEffect, useRef, useState } from "react"
 
@@ -91,7 +92,7 @@ export function IssueSearchCommand({
       const controller = new AbortController()
       abortRef.current = controller
 
-      fetch(`/api/issues/search?q=${encodeURIComponent(term)}`, {
+      fetch(scopedApiUrl(`/api/issues/search?q=${encodeURIComponent(term)}`), {
         signal: controller.signal,
       })
         .then((res) => {
@@ -139,7 +140,7 @@ export function IssueSearchCommand({
             setResults([])
             setLoading(value.trim().length >= 2)
           }}
-          placeholder="Buscar por título o código (ej. MOVO-123)…"
+          placeholder="Buscar por título o código de issue…"
         />
         <CommandList>
           {loading && (

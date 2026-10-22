@@ -2,8 +2,9 @@ import { NextResponse } from "next/server"
 
 import { auth } from "@/auth"
 import { getLinearSource } from "@/lib/linear/client"
+import { scopedHandler } from "@/lib/workspaces/api"
 
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
@@ -22,3 +23,4 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: message }, { status: 502 })
   }
 }
+export const GET = scopedHandler(handleGET)

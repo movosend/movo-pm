@@ -5,8 +5,10 @@ import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db/client"
 import { allowedUsers } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
+import { requireAdmin } from "@/lib/workspaces/access"
 
 export async function addAllowedUser(formData: FormData) {
+  await requireAdmin()
   const email = String(formData.get("email") ?? "")
     .trim()
     .toLowerCase()
@@ -18,6 +20,7 @@ export async function addAllowedUser(formData: FormData) {
 }
 
 export async function removeAllowedUser(email: string) {
+  await requireAdmin()
   await db.delete(allowedUsers).where(eq(allowedUsers.email, email))
   revalidatePath("/settings/users")
 }

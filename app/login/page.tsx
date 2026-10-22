@@ -42,8 +42,7 @@ export default async function LoginPage() {
           />
           <CardTitle className="text-xl">Movo Project Manager</CardTitle>
           <CardDescription>
-            Acceso exclusivo para el equipo de Movo. Inicia sesión con tu cuenta
-            de GitHub de la organización.
+            Iniciá sesión con la cuenta de GitHub cuyo correo verificado fue invitado.
           </CardDescription>
         </CardHeader>
         <CardContent>

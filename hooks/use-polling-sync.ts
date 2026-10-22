@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { scopedApiUrl } from "@/lib/workspaces/routes"
 
 const POLL_INTERVAL_MS = 60_000
 
@@ -18,7 +19,7 @@ export function usePollingSync() {
 
     async function poll() {
       if (document.visibilityState !== "visible") return
-      const res = await fetch("/api/sync", { method: "POST" })
+      const res = await fetch(scopedApiUrl("/api/sync"), { method: "POST" })
       if (!res.ok) return
       const body = await res.json().catch(() => null)
       if (body?.changed) router.refresh()

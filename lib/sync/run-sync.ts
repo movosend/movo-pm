@@ -8,6 +8,7 @@ import {
 } from "@/lib/db/queries"
 import { getLinearSource } from "@/lib/linear/client"
 import type { Snapshot } from "@/lib/schema/snapshot"
+import { currentTeam } from "@/lib/workspaces/context"
 
 export type SyncSource = "webhook" | "poll" | "manual"
 
@@ -20,13 +21,13 @@ export async function runSync(
     const snapshot = await linearSource.getActiveCycleSnapshot()
     const hash = snapshotContentHash(snapshot)
 
-    const latest = await getLatestSnapshot(process.env.LINEAR_TEAM_KEY!)
+    const latest = await getLatestSnapshot(currentTeam()?.key ?? process.env.LINEAR_TEAM_KEY!)
     const changed = latest?.contentHash !== hash
 
     if (changed) {
       await insertSnapshot({
         cycleId: snapshot.cycle.name,
-        teamKey: process.env.LINEAR_TEAM_KEY!,
+        teamKey: currentTeam()?.key ?? process.env.LINEAR_TEAM_KEY!,
         payload: snapshot,
         contentHash: hash,
       })

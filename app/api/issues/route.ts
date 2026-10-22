@@ -3,12 +3,14 @@ import { auth } from "@/auth"
 import { getLinearSource } from "@/lib/linear/client"
 import { runSync } from "@/lib/sync/run-sync"
 import { issueRequestSchema } from "@/lib/schema/issue-update"
+import { scopedHandler } from "@/lib/workspaces/api"
+import { auditLinearWrite } from "@/lib/workspaces/audit"
 import {
   IssueConflictError,
   updateIssueWithReceipt,
 } from "@/lib/api/update-issue"
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const session = await auth()
   if (!session?.user)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
@@ -29,6 +31,7 @@ export async function POST(request: Request) {
       input,
       expected
     )
+    await auditLinearWrite(session.user.email ?? "unknown", "issue.update", issueId)
     return NextResponse.json(result)
   } catch (error) {
     const message =
@@ -39,3 +42,4 @@ export async function POST(request: Request) {
     )
   }
 }
+export const POST = scopedHandler(handlePOST)

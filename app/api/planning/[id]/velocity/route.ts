@@ -3,7 +3,8 @@ import { auth } from "@/auth"
 import { getLinearSource } from "@/lib/linear/client"
 import { requireStage } from "@/lib/planning/store"
 import { z } from "zod"
-export async function GET(
+import { scopedHandler } from "@/lib/workspaces/api"
+async function handleGET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -22,3 +23,4 @@ export async function GET(
     )
   }
 }
+export const GET = scopedHandler(handleGET)

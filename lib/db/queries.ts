@@ -6,6 +6,7 @@ import { db } from "@/lib/db/client"
 import { contentHash } from "@/lib/db/content-hash"
 import { analyses, snapshots, syncLog } from "@/lib/db/schema"
 import type { Analysis, Snapshot } from "@/lib/schema/snapshot"
+import { currentTeam } from "@/lib/workspaces/context"
 
 /**
  * Hash only the parts of a Snapshot that reflect real Linear content.
@@ -28,10 +29,11 @@ export function snapshotContentHash(snapshot: Snapshot): string {
 }
 
 export async function getLatestSnapshot(teamKey: string) {
+  const team = currentTeam()
   const [row] = await db
     .select()
     .from(snapshots)
-    .where(eq(snapshots.teamKey, teamKey))
+    .where(team ? eq(snapshots.teamId, team.id) : eq(snapshots.teamKey, teamKey))
     .orderBy(desc(snapshots.takenAt))
     .limit(1)
 
@@ -49,6 +51,7 @@ export async function insertSnapshot(params: {
     .values({
       cycleId: params.cycleId,
       teamKey: params.teamKey,
+      teamId: currentTeam()?.id,
       payload: params.payload,
       contentHash: params.contentHash,
     })
@@ -66,6 +69,7 @@ export async function insertSyncLog(params: {
     source: params.source,
     changed: params.changed,
     error: params.error ?? null,
+    teamId: currentTeam()?.id,
   })
 }
 

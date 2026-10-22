@@ -22,6 +22,13 @@
       "when": 1792119261144,
       "tag": "0002_acoustic_zuras",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792700476332,
+      "tag": "0003_petite_rhino",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,11 @@
+import { scopedApiUrl } from "@/lib/workspaces/routes"
+
 export async function planningRequest<T>(
   url: string,
   body?: unknown
 ): Promise<T> {
   const response = await fetch(
-    url,
+    scopedApiUrl(url),
     body
       ? {
           method: "POST",

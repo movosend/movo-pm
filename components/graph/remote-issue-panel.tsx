@@ -8,6 +8,7 @@ import { SidePanel, type PanelProps } from "@/components/graph/side-panel"
 import { useIssueUpdates } from "@/components/graph/issue-updates"
 import { buildGraph } from "@/lib/graph/build"
 import type { IssueDetail, Snapshot } from "@/lib/schema/snapshot"
+import { scopedApiUrl } from "@/lib/workspaces/routes"
 
 export function RemoteIssuePanel({
   issueId,
@@ -27,7 +28,7 @@ export function RemoteIssuePanel({
     if (updating) return
     const controller = new AbortController()
     fetch(
-      `/api/issues/${encodeURIComponent(issueId)}?cycle=${encodeURIComponent(snapshot.cycle.id)}`,
+      scopedApiUrl(`/api/issues/${encodeURIComponent(issueId)}?cycle=${encodeURIComponent(snapshot.cycle.id)}`),
       {
         signal: controller.signal,
       }

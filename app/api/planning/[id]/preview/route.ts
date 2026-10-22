@@ -5,9 +5,10 @@ import { requireStage, stageItems } from "@/lib/planning/store"
 import { getLinearSource } from "@/lib/linear/client"
 import { mapConcurrent } from "@/lib/planning/concurrency"
 import { buildStagePreview } from "@/lib/planning/preview"
+import { scopedHandler } from "@/lib/workspaces/api"
 
 export const maxDuration = 300
-export async function GET(
+async function handleGET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -41,3 +42,4 @@ export async function GET(
     )
   }
 }
+export const GET = scopedHandler(handleGET)

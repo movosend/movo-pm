@@ -17,6 +17,8 @@ import {
 } from "@/lib/planning/transfers"
 import { editDependency } from "@/lib/planning/dependencies"
 import { runSync } from "@/lib/sync/run-sync"
+import { scopedHandler } from "@/lib/workspaces/api"
+import { auditLinearWrite } from "@/lib/workspaces/audit"
 const ids = z.array(z.string().min(1).max(150)).min(1).max(100)
 const actionSchema = z.discriminatedUnion("action", [
   z.object({
@@ -72,7 +74,7 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("sync") }),
 ])
 type Context = { params: Promise<{ id: string }> }
-export async function GET(_request: Request, { params }: Context) {
+async function handleGET(_request: Request, { params }: Context) {
   if (!(await auth())?.user)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   const { id } = await params
@@ -90,7 +92,7 @@ export async function GET(_request: Request, { params }: Context) {
     return failure(error)
   }
 }
-export async function POST(request: Request, { params }: Context) {
+async function handlePOST(request: Request, { params }: Context) {
   const session = await auth()
   if (!session?.user?.email)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
@@ -107,7 +109,11 @@ export async function POST(request: Request, { params }: Context) {
     switch (body.action) {
       case "dependency":
       case "removeDependency":
-        return NextResponse.json(await editDependency(id, body))
+        {
+          const result = await editDependency(id, body)
+          if (result.changed) await auditLinearWrite(session.user.email, body.action, body.sourceId)
+          return NextResponse.json(result)
+        }
       case "edit":
         return NextResponse.json({
           stage: await editStage(id, body.version, {
@@ -136,14 +142,16 @@ export async function POST(request: Request, { params }: Context) {
           ),
         })
       case "execute":
-        return NextResponse.json({
-          item: await executeTransferItem(
+        {
+          const item = await executeTransferItem(
             id,
             body.transferId,
             body.issueId,
             body.undo
-          ),
-        })
+          )
+          await auditLinearWrite(session.user.email, body.undo ? "transfer.undo" : "transfer.execute", body.issueId)
+          return NextResponse.json({ item })
+        }
       case "sync": {
         try {
           await runSync("manual")
@@ -171,3 +179,5 @@ function failure(error: unknown) {
   )
 }
 export const maxDuration = 300
+export const GET = scopedHandler(handleGET)
+export const POST = scopedHandler(handlePOST)

@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "@/components/ui/tooltip"
+import { scopedApiUrl } from "@/lib/workspaces/routes"
 
 export function SyncButton({ compact = false }: { compact?: boolean }) {
   const router = useRouter()
@@ -22,7 +23,7 @@ export function SyncButton({ compact = false }: { compact?: boolean }) {
     setError(null)
     setSyncing(true)
     try {
-      const res = await fetch("/api/sync", { method: "POST" })
+      const res = await fetch(scopedApiUrl("/api/sync"), { method: "POST" })
       if (!res.ok) {
         const body = await res.json().catch(() => null)
         setError(body?.error ?? "No se pudo sincronizar.")

@@ -3,6 +3,8 @@ import Image from "next/image"
 
 import { ProfileMenu } from "@/components/profile-menu"
 import { auth } from "@/auth"
+import { listAccessibleTeams, isAdmin } from "@/lib/workspaces/access"
+import { WorkspaceSwitcher } from "@/components/workspace-switcher"
 
 export default async function AppLayout({
   children,
@@ -10,6 +12,7 @@ export default async function AppLayout({
   children: React.ReactNode
 }) {
   const session = await auth()
+  const workspaces = await listAccessibleTeams()
 
   return (
     <div className="flex h-svh flex-col overflow-hidden">
@@ -26,12 +29,14 @@ export default async function AppLayout({
             Movo Project Manager
           </span>
         </div>
+        <WorkspaceSwitcher workspaces={workspaces} />
         <AppNavigation />
         <div className="ml-auto flex items-center gap-3">
           <ProfileMenu
             name={session?.user?.name}
             email={session?.user?.email}
             image={session?.user?.image}
+            admin={isAdmin(session?.user?.id)}
           />
         </div>
       </header>

@@ -22,10 +22,12 @@ export function ProfileMenu({
   name,
   email,
   image,
+  admin = false,
 }: {
   name?: string | null
   email?: string | null
   image?: string | null
+  admin?: boolean
 }) {
   const displayName = name ?? email ?? "Usuario"
 
@@ -57,14 +59,14 @@ export function ProfileMenu({
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem
+        {admin && <DropdownMenuItem
           render={<Link href="/settings" />}
           nativeButton={false}
         >
           <SettingsIcon className="size-4" />
           Configuración
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        </DropdownMenuItem>}
+        {admin && <DropdownMenuSeparator />}
         <DropdownMenuItem
           variant="destructive"
           onClick={() => {

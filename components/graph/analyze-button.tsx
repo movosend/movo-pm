@@ -1,4 +1,5 @@
 "use client"
+import { scopedApiUrl } from "@/lib/workspaces/routes"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -39,7 +40,7 @@ export function AnalyzeButton({ hasAnalysis }: { hasAnalysis: boolean }) {
     setError(null)
     setStep(0)
     setElapsed(0)
-    const res = await fetch("/api/analysis", { method: "POST" })
+    const res = await fetch(scopedApiUrl("/api/analysis"), { method: "POST" })
     setIsPending(false)
     if (!res.ok) {
       const body = await res.json().catch(() => null)

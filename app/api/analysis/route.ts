@@ -9,8 +9,10 @@ import {
   updateSnapshotAnalysis,
 } from "@/lib/db/queries"
 import type { Snapshot } from "@/lib/schema/snapshot"
+import { currentTeam } from "@/lib/workspaces/context"
+import { scopedHandler } from "@/lib/workspaces/api"
 
-export async function POST() {
+async function handlePOST() {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
@@ -26,7 +28,7 @@ export async function POST() {
     )
   }
 
-  const row = await getLatestSnapshot(process.env.LINEAR_TEAM_KEY!)
+  const row = await getLatestSnapshot(currentTeam()?.key ?? process.env.LINEAR_TEAM_KEY!)
   if (!row) {
     return NextResponse.json(
       { error: "No hay un snapshot todavía. Sincronizá primero." },
@@ -55,3 +57,4 @@ export async function POST() {
 
   return NextResponse.json({ analysis: result.analysis })
 }
+export const POST = scopedHandler(handlePOST)

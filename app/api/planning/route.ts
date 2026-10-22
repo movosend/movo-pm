@@ -2,12 +2,13 @@ import { auth } from "@/auth"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { createStage, listStages } from "@/lib/planning/store"
-export async function GET() {
+import { scopedHandler } from "@/lib/workspaces/api"
+async function handleGET() {
   if (!(await auth())?.user)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   return NextResponse.json({ stages: await listStages() })
 }
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const session = await auth()
   if (!session?.user?.email)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
@@ -40,3 +41,5 @@ export async function POST(request: Request) {
     )
   }
 }
+export const GET = scopedHandler(handleGET)
+export const POST = scopedHandler(handlePOST)

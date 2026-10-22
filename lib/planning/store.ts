@@ -9,13 +9,15 @@ import {
 } from "@/lib/db/schema"
 import { getLinearSource } from "@/lib/linear/client"
 import type { MembershipChange } from "./types"
+import { currentTeam } from "@/lib/workspaces/context"
 
-export const teamKey = () => process.env.LINEAR_TEAM_KEY!
+export const teamKey = () => currentTeam()?.key ?? process.env.LINEAR_TEAM_KEY!
+const teamFilter = () => currentTeam() ? eq(stages.teamId, currentTeam()!.id) : eq(stages.teamKey, teamKey())
 export async function requireStage(id: string, editable = false) {
   const [stage] = await db
     .select()
     .from(stages)
-    .where(and(eq(stages.id, id), eq(stages.teamKey, teamKey())))
+    .where(and(eq(stages.id, id), teamFilter()))
   if (!stage || (editable && stage.archived))
     throw new Error("La hoja no está disponible.")
   return stage
@@ -30,7 +32,7 @@ export async function listStages() {
   return db
     .select()
     .from(stages)
-    .where(eq(stages.teamKey, teamKey()))
+    .where(teamFilter())
     .orderBy(stages.updatedAt)
 }
 export async function createStage(
@@ -46,7 +48,7 @@ export async function createStage(
     await db.batch([
       db
         .insert(stages)
-        .values({ id, name, teamKey: teamKey(), createdBy: email }),
+        .values({ id, name, teamKey: teamKey(), teamId: currentTeam()?.id, createdBy: email }),
       db.insert(items).values(
         sourceItems.map((item) => ({
           stageId: id,
@@ -58,7 +60,7 @@ export async function createStage(
   } else
     await db
       .insert(stages)
-      .values({ id, name, teamKey: teamKey(), createdBy: email })
+      .values({ id, name, teamKey: teamKey(), teamId: currentTeam()?.id, createdBy: email })
   return requireStage(id)
 }
 export async function editStage(

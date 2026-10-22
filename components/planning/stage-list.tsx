@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { ArrowRightIcon, FilesIcon, PlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -34,9 +34,11 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { Stage } from "@/lib/planning/types"
 import { planningRequest } from "./api"
+import { scopedPageUrl } from "@/lib/workspaces/routes"
 
 export function StageList() {
   const router = useRouter()
+  const pathname = usePathname()
   const [stages, setStages] = useState<Stage[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
@@ -69,7 +71,7 @@ export function StageList() {
       const body = await planningRequest<{ stage: Stage }>("/api/planning", {
         name,
       })
-      router.push(`/planning/${body.stage.id}`)
+      router.push(scopedPageUrl(`/planning/${body.stage.id}`, pathname))
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -145,7 +147,7 @@ export function StageList() {
         {visible?.map((stage) => (
           <Link
             key={stage.id}
-            href={`/planning/${stage.id}`}
+            href={scopedPageUrl(`/planning/${stage.id}`, pathname)}
             className="group min-w-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <Card

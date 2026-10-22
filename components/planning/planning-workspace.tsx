@@ -1,7 +1,7 @@
 "use client"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   ArchiveIcon,
   ArrowLeftIcon,
@@ -55,6 +55,7 @@ import {
   type Transfer,
 } from "@/lib/planning/types"
 import { planningRequest } from "./api"
+import { scopedPageUrl } from "@/lib/workspaces/routes"
 import { PlanCapacity } from "./plan-capacity"
 import { DependencyDialog } from "./dependency-dialog"
 import { PlanningCanvas } from "./planning-canvas"
@@ -66,15 +67,16 @@ type StageData = {
   cycles: PlanningCycle[]
   transfers: Transfer[]
 }
-export function PlanningWorkspace({ stageId }: { stageId: string }) {
+export function PlanningWorkspace({ stageId, workspaceSlug }: { stageId: string; workspaceSlug: string }) {
   return (
     <IssueUpdatesProvider>
-      <Workspace key={stageId} stageId={stageId} />
+      <Workspace key={stageId} stageId={stageId} workspaceSlug={workspaceSlug} />
     </IssueUpdatesProvider>
   )
 }
-function Workspace({ stageId }: { stageId: string }) {
+function Workspace({ stageId, workspaceSlug }: { stageId: string; workspaceSlug: string }) {
   const router = useRouter()
+  const pathname = usePathname()
   const { notify, busy: issueBusy } = useIssueUpdates()
   const url = `/api/planning/${stageId}`
   const [data, setData] = useState<StageData | null>(null)
@@ -374,7 +376,7 @@ function Workspace({ stageId }: { stageId: string }) {
         name: `${data.stage.name.slice(0, 90)} · copia`,
         sourceId: stageId,
       })
-      router.push(`/planning/${result.stage.id}`)
+      router.push(scopedPageUrl(`/planning/${result.stage.id}`, pathname))
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -433,9 +435,9 @@ function Workspace({ stageId }: { stageId: string }) {
       team: "Equipo",
       taken: "",
       live: true,
-      workspace: "movosend",
+      workspace: workspaceSlug,
     }
-  }, [data?.cycles])
+  }, [data?.cycles, workspaceSlug])
   const nodesById = useMemo(() => {
     const map = new Map<string, Node>()
     Object.values(details).forEach((detail) =>
@@ -754,7 +756,7 @@ function Workspace({ stageId }: { stageId: string }) {
     <div className="flex h-full flex-col">
       <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
         <Link
-          href="/planning"
+          href={scopedPageUrl("/planning", pathname)}
           aria-label="Volver a las hojas"
           className="rounded-md p-2 hover:bg-muted"
         >

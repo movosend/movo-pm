@@ -1,4 +1,9 @@
 import "server-only"
+import { currentTeam } from "@/lib/workspaces/context"
+import {
+  getWorkspaceToken,
+  markWorkspaceReconnect,
+} from "@/lib/workspaces/linear-oauth"
 import {
   calculateVelocity,
   type Velocity,
@@ -55,7 +60,7 @@ class LinearApiKeySource implements LinearSource {
   private teamId: string | null = null
 
   constructor(
-    private readonly apiKey: string,
+    private readonly apiKey: string | (() => Promise<string>),
     private readonly teamKey: string,
     private readonly workspace: string
   ) {}
@@ -64,18 +69,28 @@ class LinearApiKeySource implements LinearSource {
     query: string,
     variables: Record<string, unknown>
   ): Promise<GraphQLJson> {
+    const credential =
+      typeof this.apiKey === "string"
+        ? this.apiKey
+        : `Bearer ${await this.apiKey()}`
     const res = await fetch(LINEAR_GRAPHQL_ENDPOINT, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         // Linear expects the raw key here, no "Bearer" prefix.
-        Authorization: this.apiKey,
+        Authorization: credential,
       },
       body: JSON.stringify({ query, variables }),
       cache: "no-store",
       signal: AbortSignal.timeout(20000),
     })
 
+    if (res.status === 401 && currentTeam()?.connectionStatus === "connected") {
+      await markWorkspaceReconnect(currentTeam()!.workspaceId)
+      throw new Error(
+        "La conexión con Linear venció. Un administrador debe reconectarla."
+      )
+    }
     if (res.status === 401 || res.status === 403) {
       throw new Error(
         `La API key de Linear fue rechazada (HTTP ${res.status}).`
@@ -110,7 +125,9 @@ class LinearApiKeySource implements LinearSource {
     const snapshot = fromLinearResponse(json, this.workspace)
     // Fetch full epic context and only the issue relations truncated by the compact cycle query.
     const extraIds = new Set<string>(
-      snapshot.nodes.filter((node) => node.isEpic).map((node) => node.id)
+      snapshot.nodes
+        .filter((node) => node.isEpic && node.id.startsWith(`${this.teamKey}-`))
+        .map((node) => node.id)
     )
     for (const issue of active.issues.nodes) {
       if (
@@ -142,6 +159,8 @@ class LinearApiKeySource implements LinearSource {
     const json = await this.request(ISSUE_DETAIL_QUERY, { id })
     const issue = json.data?.issue
     if (!issue) throw new Error("No se encontró la issue.")
+    if (currentTeam() && issue.team?.key !== this.teamKey)
+      throw new Error("La issue no pertenece al equipo seleccionado.")
     for (const [field, cursor] of [
       ["children", "childrenAfter"],
       ["relations", "relationsAfter"],
@@ -267,7 +286,7 @@ class LinearApiKeySource implements LinearSource {
   async getIssueValues(id: string): Promise<IssueValues> {
     const json = await this.request(
       `query IssueValues($id: String!) {
-      issue(id: $id) { assignee { id } state { id } cycle { id } estimate }
+      issue(id: $id) { team { key } assignee { id } state { id } cycle { id } estimate }
     }`,
       { id }
     )
@@ -278,6 +297,8 @@ class LinearApiKeySource implements LinearSource {
           .join(" · ")
       )
     const issue = json.data?.issue
+    if (currentTeam() && issue?.team?.key !== this.teamKey)
+      throw new Error("La issue no pertenece al equipo seleccionado.")
     if (!issue?.state?.id)
       throw new Error("No se pudo leer el estado actual de la issue.")
     return {
@@ -289,6 +310,7 @@ class LinearApiKeySource implements LinearSource {
   }
 
   async updateIssue(id: string, input: IssueUpdateInput): Promise<void> {
+    if (currentTeam()) await this.getIssueValues(id)
     if (input.cycleId !== undefined || input.estimate !== undefined) {
       const check = await this.request(
         `query IssueKind($id: String!) { issue(id: $id) { children(first: 1) { nodes { id } } } }`,
@@ -329,18 +351,26 @@ class LinearApiKeySource implements LinearSource {
   }
 }
 
-let cached: LinearSource | null = null
-
 export function getLinearSource(): LinearSource {
-  if (cached) return cached
-
+  const team = currentTeam()
+  if (team?.connectionStatus === "connected")
+    return new LinearApiKeySource(
+      () => getWorkspaceToken(team.workspaceId),
+      team.key,
+      team.workspaceSlug
+    )
+  if (team && team.connectionStatus !== "legacy")
+    throw new Error("El workspace de Linear necesita conexión.")
   const apiKey = process.env.LINEAR_API_KEY
-  const teamKey = process.env.LINEAR_TEAM_KEY
+  const teamKey = team?.key ?? process.env.LINEAR_TEAM_KEY
   if (!apiKey)
     throw new Error("Falta LINEAR_API_KEY en el entorno del servidor.")
   if (!teamKey)
     throw new Error("Falta LINEAR_TEAM_KEY en el entorno del servidor.")
 
-  cached = new LinearApiKeySource(apiKey, teamKey, "movosend")
-  return cached
+  return new LinearApiKeySource(
+    apiKey,
+    teamKey,
+    team?.workspaceSlug ?? "movosend"
+  )
 }
