@@ -1,7 +1,10 @@
 import { AppNavigation } from "@/components/app-navigation"
 import Image from "next/image"
+import Link from "next/link"
+import { SettingsIcon } from "lucide-react"
 
 import { ProfileMenu } from "@/components/profile-menu"
+import { Button } from "@/components/ui/button"
 import { auth } from "@/auth"
 import { listAccessibleTeams, isAdmin } from "@/lib/workspaces/access"
 import { WorkspaceSwitcher } from "@/components/workspace-switcher"
@@ -13,6 +16,7 @@ export default async function AppLayout({
 }) {
   const session = await auth()
   const workspaces = await listAccessibleTeams()
+  const admin = isAdmin(session?.user?.id)
 
   return (
     <div className="flex h-svh flex-col overflow-hidden">
@@ -32,11 +36,22 @@ export default async function AppLayout({
         <WorkspaceSwitcher workspaces={workspaces} />
         <AppNavigation />
         <div className="ml-auto flex items-center gap-3">
+          {admin && (
+            <Button
+              variant="ghost"
+              size="sm"
+              render={<Link href="/settings/workspaces" />}
+              nativeButton={false}
+            >
+              <SettingsIcon data-icon="inline-start" />
+              Configuración
+            </Button>
+          )}
           <ProfileMenu
             name={session?.user?.name}
             email={session?.user?.email}
             image={session?.user?.image}
-            admin={isAdmin(session?.user?.id)}
+            admin={admin}
           />
         </div>
       </header>
