@@ -10,7 +10,12 @@ import {
 } from "@/lib/workspaces/linear-oauth"
 
 type Discovery = {
-  organization: { id: string; name: string; urlKey: string }
+  organization: {
+    id: string
+    name: string
+    urlKey: string
+    logoUrl: string | null
+  }
   teams: {
     nodes: { id: string; key: string; name: string }[]
     pageInfo: { hasNextPage: boolean; endCursor: string | null }
@@ -43,7 +48,7 @@ export async function GET(request: NextRequest) {
       new URL("/api/linear/callback", request.url).toString()
     )
     const query = `query Discover($after: String) {
-      organization { id name urlKey }
+      organization { id name urlKey logoUrl }
       teams(first: 100, after: $after) { nodes { id key name } pageInfo { hasNextPage endCursor } }
     }`
     const first = await linearGraphql<Discovery>(tokens.access_token, query)
@@ -78,6 +83,7 @@ export async function GET(request: NextRequest) {
       organizationId: org.id,
       name: org.name,
       slug: org.urlKey,
+      logoUrl: org.logoUrl,
       accessToken: encryptToken(tokens.access_token),
       refreshToken: encryptToken(tokens.refresh_token),
       tokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
@@ -108,14 +114,12 @@ export async function GET(request: NextRequest) {
           .set({ linearTeamId: team.id, name: team.name })
           .where(eq(linearTeams.id, stored.id))
       else
-        await db
-          .insert(linearTeams)
-          .values({
-            workspaceId: workspace.id,
-            linearTeamId: team.id,
-            key: team.key,
-            name: team.name,
-          })
+        await db.insert(linearTeams).values({
+          workspaceId: workspace.id,
+          linearTeamId: team.id,
+          key: team.key,
+          name: team.name,
+        })
     }
     const response = NextResponse.redirect(
       new URL("/settings/workspaces", request.url)

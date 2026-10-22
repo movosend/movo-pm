@@ -60,6 +60,7 @@ export async function listAccessibleTeams() {
       id: workspace.id,
       name: workspace.name,
       slug: workspace.slug,
+      logoUrl: workspace.logoUrl,
       connectionStatus: workspace.connectionStatus,
     },
     teams: teams

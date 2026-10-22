@@ -12,12 +12,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { workspacePath } from "@/lib/workspaces/routes"
+import { WorkspaceAvatar } from "@/components/workspace-avatar"
 
 type WorkspaceOption = {
   workspace: {
     id: string
     name: string
     slug: string
+    logoUrl: string | null
     connectionStatus: string
   }
   teams: { id: string; key: string; name: string }[]
@@ -40,6 +42,13 @@ export function WorkspaceSwitcher({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+        {current && (
+          <WorkspaceAvatar
+            name={current.workspace.name}
+            logoUrl={current.workspace.logoUrl}
+            small
+          />
+        )}
         <span className="max-w-36 truncate">
           {current
             ? `${current.workspace.name} · ${current.team.key}`
@@ -52,7 +61,14 @@ export function WorkspaceSwitcher({
           .filter((item) => item.teams.length)
           .map((item) => (
             <div key={item.workspace.id}>
-              <DropdownMenuLabel>{item.workspace.name}</DropdownMenuLabel>
+              <DropdownMenuLabel className="flex items-center gap-2">
+                <WorkspaceAvatar
+                  name={item.workspace.name}
+                  logoUrl={item.workspace.logoUrl}
+                  small
+                />
+                {item.workspace.name}
+              </DropdownMenuLabel>
               {item.teams.map((team) => (
                 <DropdownMenuItem
                   key={team.id}

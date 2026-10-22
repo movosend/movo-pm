@@ -37,15 +37,15 @@ export default async function AppLayout({
         <WorkspaceSwitcher workspaces={workspaces} />
         <AppNavigation />
         <div className="ml-auto flex items-center gap-3">
-          {(admin || needsSignIn) && (
+          {needsSignIn && (
             <Button
               variant="ghost"
               size="sm"
-              render={<Link href={admin ? "/settings/workspaces" : "/settings"} />}
+              render={<Link href="/settings" />}
               nativeButton={false}
             >
               <SettingsIcon data-icon="inline-start" />
-              {admin ? "Configuración" : "Actualizar acceso"}
+              Actualizar acceso
             </Button>
           )}
           <ProfileMenu

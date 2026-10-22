@@ -16,6 +16,7 @@ export const linearWorkspaces = pgTable("linear_workspaces", {
   organizationId: text("organization_id").notNull().unique(),
   slug: text("slug").notNull(),
   name: text("name").notNull(),
+  logoUrl: text("logo_url"),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
   tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
