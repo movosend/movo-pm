@@ -17,6 +17,7 @@ export default async function AppLayout({
   const session = await auth()
   const workspaces = await listAccessibleTeams()
   const admin = isAdmin(session?.user?.id)
+  const needsSignIn = Boolean(session?.user && !session.user.id)
 
   return (
     <div className="flex h-svh flex-col overflow-hidden">
@@ -36,15 +37,15 @@ export default async function AppLayout({
         <WorkspaceSwitcher workspaces={workspaces} />
         <AppNavigation />
         <div className="ml-auto flex items-center gap-3">
-          {admin && (
+          {(admin || needsSignIn) && (
             <Button
               variant="ghost"
               size="sm"
-              render={<Link href="/settings/workspaces" />}
+              render={<Link href={admin ? "/settings/workspaces" : "/settings"} />}
               nativeButton={false}
             >
               <SettingsIcon data-icon="inline-start" />
-              Configuración
+              {admin ? "Configuración" : "Actualizar acceso"}
             </Button>
           )}
           <ProfileMenu

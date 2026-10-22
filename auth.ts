@@ -60,15 +60,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.githubId = user.id
         token.email = user.email
-      } else if (!token.githubId && token.sub) {
-        // Existing GitHub sessions predate the explicit githubId claim.
-        token.githubId = token.sub
       }
       return token
     },
     session({ session, token }) {
       if (session.user) {
-        session.user.id = String(token.githubId ?? token.sub ?? "")
+        session.user.id = String(token.githubId ?? "")
         session.user.email = typeof token.email === "string" ? token.email : ""
       }
       return session

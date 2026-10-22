@@ -6,7 +6,8 @@ import { listRecentAnalyses } from "@/lib/db/queries"
 import { checkAnalysisRateLimit } from "@/lib/analysis/rate-limit"
 import { estimateCostUsd } from "@/lib/analysis/pricing"
 import { getRealCostSummary } from "@/lib/analysis/admin-usage"
-import { requireAdmin } from "@/lib/workspaces/access"
+import { auth } from "@/auth"
+import { isAdmin } from "@/lib/workspaces/access"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -49,7 +50,7 @@ async function loadRealMonthCost(monthStart: Date) {
 }
 
 export default async function UsagePage() {
-  await requireAdmin()
+  if (!isAdmin((await auth())?.user?.id)) return null
   const monthStart = startOfMonth()
 
   const [analyses, rateLimit, realCost] = await Promise.all([

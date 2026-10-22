@@ -1,11 +1,12 @@
 import Link from "next/link"
+import { auth } from "@/auth"
 import { db } from "@/lib/db/client"
 import {
   linearTeams,
   linearWorkspaces,
   workspaceMembers,
 } from "@/lib/db/schema"
-import { requireAdmin } from "@/lib/workspaces/access"
+import { isAdmin } from "@/lib/workspaces/access"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -23,7 +24,7 @@ import {
 } from "./actions"
 
 export default async function WorkspacesSettingsPage() {
-  await requireAdmin()
+  if (!isAdmin((await auth())?.user?.id)) return null
   const workspaces = await db.select().from(linearWorkspaces)
   const teams = await db.select().from(linearTeams)
   const members = await db.select().from(workspaceMembers)

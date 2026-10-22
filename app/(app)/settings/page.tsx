@@ -9,10 +9,11 @@ export const metadata: Metadata = {
   title: "Settings",
 }
 
-import { requireAdmin } from "@/lib/workspaces/access"
+import { auth } from "@/auth"
+import { isAdmin } from "@/lib/workspaces/access"
 
 export default async function SettingsPage() {
-  await requireAdmin()
+  if (!isAdmin((await auth())?.user?.id)) return null
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-4 overflow-y-auto p-6">
       <Button
