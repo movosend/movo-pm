@@ -4,6 +4,7 @@ import type {
   SearchIssue,
   Snapshot,
 } from "@/lib/schema/snapshot"
+import type { TeamGraphPage } from "@/lib/schema/team-issues"
 
 // Raw shapes as returned by the CycleGraph query (see lib/linear/query.ts).
 // Mirrors the Core/Lite fragments — kept intentionally loose (no brand types)
@@ -96,6 +97,99 @@ function toNode(
     description: issue.description ?? null,
     assigneeId: issue.assignee?.id ?? null,
     stateId: issue.state?.id ?? null,
+  }
+}
+
+type TeamGraphIssue = LinearIssueLite & {
+  relations: {
+    nodes: { type: string; relatedIssue: { identifier: string } }[]
+  }
+  inverseRelations: {
+    nodes: { type: string; issue: { identifier: string } }[]
+  }
+}
+
+type TeamGraphResponse = {
+  data?: {
+    teams?: {
+      nodes: {
+        name: string
+        activeCycle: {
+          id: string
+          name: string | null
+          number: number
+          startsAt: string
+          endsAt: string
+        } | null
+        states: {
+          nodes: { id: string; name: string; type: string; position: number }[]
+        }
+        members: { nodes: { id: string; displayName: string }[] }
+        issues: {
+          nodes: TeamGraphIssue[]
+          pageInfo: { hasNextPage: boolean; endCursor: string | null }
+        }
+      }[]
+    }
+  }
+}
+
+export function fromTeamGraphPage(
+  json: TeamGraphResponse,
+  workspace: string
+): TeamGraphPage {
+  const team = json.data?.teams?.nodes?.[0]
+  if (!team) throw new Error("No encontré el equipo en Linear.")
+  const page = team.issues
+  const blocks = new Set<string>()
+  page.nodes.forEach((issue) => {
+    issue.relations.nodes.forEach((relation) => {
+      if (relation.type === "blocks")
+        blocks.add(`${issue.identifier}|${relation.relatedIssue.identifier}`)
+    })
+    issue.inverseRelations.nodes.forEach((relation) => {
+      if (relation.type === "blocks")
+        blocks.add(`${relation.issue.identifier}|${issue.identifier}`)
+    })
+  })
+  const cycle = team.activeCycle
+  const fmt = (value?: string) =>
+    value
+      ? new Date(value).toLocaleDateString("es-AR", {
+          day: "numeric",
+          month: "short",
+        })
+      : ""
+  return {
+    nodes: page.nodes.map((issue) => toNode(issue, true)),
+    blocks: [...blocks].map((value) => value.split("|") as [string, string]),
+    states: [...team.states.nodes]
+      .sort((a, b) => a.position - b.position)
+      .map((state) => ({
+        id: state.id,
+        name: state.name,
+        type: state.type as Node["type"],
+      })),
+    members: team.members.nodes.map((member) => ({
+      id: member.id,
+      name: member.displayName,
+    })),
+    cycle: {
+      id: cycle?.id ?? "all-issues",
+      number: cycle?.number ?? 0,
+      team: team.name,
+      name:
+        cycle?.name ?? (cycle ? `Ciclo ${cycle.number}` : "Sin ciclo activo"),
+      start: fmt(cycle?.startsAt),
+      end: fmt(cycle?.endsAt),
+      taken: new Date().toLocaleString("es-AR", {
+        dateStyle: "short",
+        timeStyle: "short",
+      }),
+      live: Boolean(cycle),
+      workspace,
+    },
+    nextCursor: page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null,
   }
 }
 

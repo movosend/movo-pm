@@ -169,6 +169,7 @@ function AddToCycleButton({ node, cycle }: { node: Node; cycle: Cycle }) {
   )
 }
 export type PanelProps = {
+  allIssues?: boolean
   planning?: {
     included: Set<string>
     busy: boolean
@@ -279,7 +280,7 @@ function DetailView({
               ? "Quitar de la hoja"
               : "Agregar a la hoja"}
           </Button>
-        ) : !planning && !node.isEpic && !node.inCycle ? (
+        ) : !planning && !node.isEpic && !node.inCycle && cycle.live ? (
           <AddToCycleButton node={node} cycle={cycle} />
         ) : null}
         {planning?.onManageDependencies && !node.isEpic && (
@@ -441,9 +442,9 @@ function DetailView({
                   </Button>
                 ) : child.inCycle ? (
                   <Badge variant="secondary">En ciclo</Badge>
-                ) : (
+                ) : cycle.live ? (
                   <AddToCycleButton node={child} cycle={cycle} />
-                )
+                ) : null
               }
               onSelect={onSelect}
             />
@@ -562,6 +563,7 @@ function SummaryView({
   onHover,
   group,
   onGroup,
+  allIssues,
 }: PanelProps) {
   const groups = actionGroups([...nodesById.values()], graph)
   if (group)
@@ -622,7 +624,9 @@ function SummaryView({
   return (
     <>
       <div>
-        <h2 className="text-sm font-semibold">Acciones del ciclo</h2>
+        <h2 className="text-sm font-semibold">
+          {allIssues ? "Acciones del equipo" : "Acciones del ciclo"}
+        </h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Pendientes para revisar y destrabar.
         </p>
@@ -716,24 +720,26 @@ function SummaryView({
               </p>
             )}
           </Section>
-          <Section label="Épicas del ciclo">
-            {stranded.map((entry) => {
-              const node = nodesById.get(entry.parent)
-              return node ? (
-                <Row
-                  key={node.id}
-                  node={node}
-                  sub={`${node.id} · ${entry.total - entry.outside.length} incluidas · ${entry.outside.length} fuera del ciclo`}
-                  onSelect={onSelect}
-                />
-              ) : null
-            })}
-            {!stranded.length && (
-              <p className="text-xs text-muted-foreground">
-                No hay épicas con subissues en este ciclo.
-              </p>
-            )}
-          </Section>
+          {!allIssues && (
+            <Section label="Épicas del ciclo">
+              {stranded.map((entry) => {
+                const node = nodesById.get(entry.parent)
+                return node ? (
+                  <Row
+                    key={node.id}
+                    node={node}
+                    sub={`${node.id} · ${entry.total - entry.outside.length} incluidas · ${entry.outside.length} fuera del ciclo`}
+                    onSelect={onSelect}
+                  />
+                ) : null
+              })}
+              {!stranded.length && (
+                <p className="text-xs text-muted-foreground">
+                  No hay épicas con subissues en este ciclo.
+                </p>
+              )}
+            </Section>
+          )}
           <p className="text-xs text-muted-foreground">
             {
               openBlocksList.filter(([a, b]) => {
@@ -746,61 +752,65 @@ function SummaryView({
           </p>
         </div>
       </details>
-      <details className="group/analysis">
-        <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
-          <ChevronRightIcon className="size-3.5 transition-transform group-open/analysis:rotate-90" />
-          Análisis de IA
-        </summary>
-        <div className="mt-4 flex flex-col gap-3">
-          <AnalyzeButton hasAnalysis={Boolean(analysis)} />
-          {analysis ? (
-            <>
-              <p className="text-xs text-muted-foreground">
-                Actualizado: {analysis.generated}
-              </p>
-              <p className="text-sm">{analysis.headline}</p>
-              {analysis.decisions.map((decision, index) => (
-                <section
-                  key={index}
-                  className="flex flex-col gap-2 border-l-2 pl-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <h4 className="text-xs font-semibold">{decision.title}</h4>
-                    <Badge
-                      variant={
-                        decision.sev === "alta" ? "destructive" : "secondary"
-                      }
-                    >
-                      {decision.sev}
-                    </Badge>
-                  </div>
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    {decision.body}
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {decision.issues.map((id) => (
-                      <Button
-                        key={id}
-                        variant="outline"
-                        size="xs"
-                        onClick={() => onSelect(id)}
-                        onMouseEnter={() => onHover(id)}
-                        onMouseLeave={() => onHover(null)}
+      {!allIssues && (
+        <details className="group/analysis">
+          <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+            <ChevronRightIcon className="size-3.5 transition-transform group-open/analysis:rotate-90" />
+            Análisis de IA
+          </summary>
+          <div className="mt-4 flex flex-col gap-3">
+            <AnalyzeButton hasAnalysis={Boolean(analysis)} />
+            {analysis ? (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Actualizado: {analysis.generated}
+                </p>
+                <p className="text-sm">{analysis.headline}</p>
+                {analysis.decisions.map((decision, index) => (
+                  <section
+                    key={index}
+                    className="flex flex-col gap-2 border-l-2 pl-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className="text-xs font-semibold">
+                        {decision.title}
+                      </h4>
+                      <Badge
+                        variant={
+                          decision.sev === "alta" ? "destructive" : "secondary"
+                        }
                       >
-                        {id}
-                      </Button>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Generá un análisis para revisar riesgos y decisiones.
-            </p>
-          )}
-        </div>
-      </details>
+                        {decision.sev}
+                      </Badge>
+                    </div>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      {decision.body}
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {decision.issues.map((id) => (
+                        <Button
+                          key={id}
+                          variant="outline"
+                          size="xs"
+                          onClick={() => onSelect(id)}
+                          onMouseEnter={() => onHover(id)}
+                          onMouseLeave={() => onHover(null)}
+                        >
+                          {id}
+                        </Button>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Generá un análisis para revisar riesgos y decisiones.
+              </p>
+            )}
+          </div>
+        </details>
+      )}
     </>
   )
 }

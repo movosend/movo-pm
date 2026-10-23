@@ -117,20 +117,33 @@ export const TEAM_ID_QUERY = `query TeamId($teamKey: String!) {
   }
 }`
 
-export const TEAM_ISSUES_QUERY = `query TeamIssues($teamKey: String!, $after: String) {
+export const TEAM_GRAPH_QUERY = `query TeamGraph($teamKey: String!, $after: String) {
   teams(filter: { key: { eq: $teamKey } }, first: 1) {
     nodes {
-      issues(first: 100, after: $after, orderBy: updatedAt, includeArchived: true) {
+      name
+      activeCycle { id name number startsAt endsAt }
+      states(first: 50) { nodes { id name type position } }
+      members(first: 50) { nodes { id displayName } }
+      issues(first: 50, after: $after, orderBy: updatedAt, includeArchived: true) {
         nodes {
           id
           identifier
           title
           url
-          updatedAt
-          archivedAt
-          state { name type }
-          assignee { displayName }
-          cycle { name number }
+          estimate
+          state { id name type }
+          assignee { id displayName }
+          parent { identifier title }
+          cycle { id name number }
+          childCheck: children(first: 1) { nodes { id } }
+          relations(first: 25) {
+            nodes { type relatedIssue { identifier } }
+            pageInfo { hasNextPage }
+          }
+          inverseRelations(first: 25) {
+            nodes { type issue { identifier } }
+            pageInfo { hasNextPage }
+          }
         }
         pageInfo { hasNextPage endCursor }
       }

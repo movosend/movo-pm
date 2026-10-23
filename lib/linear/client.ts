@@ -17,15 +17,16 @@ import {
   ISSUE_DETAIL_QUERY,
   ISSUE_UPDATE_MUTATION,
   TEAM_ID_QUERY,
-  TEAM_ISSUES_QUERY,
+  TEAM_GRAPH_QUERY,
 } from "@/lib/linear/query"
 import {
   fromLinearResponse,
   fromSearchResponse,
   fromIssueDetailResponse,
+  fromTeamGraphPage,
 } from "@/lib/linear/normalize"
 import type { IssueDetail, SearchIssue, Snapshot } from "@/lib/schema/snapshot"
-import type { TeamIssuePage } from "@/lib/schema/team-issues"
+import type { TeamGraphPage } from "@/lib/schema/team-issues"
 
 import type { IssueUpdateInput, IssueValues } from "@/lib/schema/issue-update"
 export type { IssueUpdateInput } from "@/lib/schema/issue-update"
@@ -50,7 +51,7 @@ export interface LinearSource {
   getIssueValues(id: string): Promise<IssueValues>
   updateIssue(id: string, input: IssueUpdateInput): Promise<void>
   searchIssues(term: string): Promise<SearchIssue[]>
-  getTeamIssuesPage(after?: string): Promise<TeamIssuePage>
+  getTeamGraphPage(after?: string): Promise<TeamGraphPage>
 }
 
 const LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql"
@@ -353,17 +354,31 @@ class LinearApiKeySource implements LinearSource {
     return fromSearchResponse(json)
   }
 
-  async getTeamIssuesPage(after?: string): Promise<TeamIssuePage> {
-    const json = await this.request(TEAM_ISSUES_QUERY, {
+  async getTeamGraphPage(after?: string): Promise<TeamGraphPage> {
+    const json = await this.request(TEAM_GRAPH_QUERY, {
       teamKey: this.teamKey,
       after: after ?? null,
     })
-    const page = json.data?.teams?.nodes?.[0]?.issues
-    if (!page) throw new Error("No encontré los issues del equipo.")
-    return {
-      issues: page.nodes,
-      nextCursor: page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null,
+    const result = fromTeamGraphPage(json, this.workspace)
+    const rawIssues = json.data?.teams?.nodes?.[0]?.issues?.nodes ?? []
+    const truncated = rawIssues.filter(
+      (issue: GraphQLJson) =>
+        issue.relations?.pageInfo?.hasNextPage ||
+        issue.inverseRelations?.pageInfo?.hasNextPage
+    )
+    if (truncated.length) {
+      const details = await mapConcurrent(truncated, (issue: GraphQLJson) =>
+        this.getIssueDetail(issue.identifier, result.cycle.id)
+      )
+      const blocks = new Set(result.blocks.map(([a, b]) => `${a}|${b}`))
+      details.forEach((detail) =>
+        detail.blocks.forEach(([a, b]) => blocks.add(`${a}|${b}`))
+      )
+      result.blocks = [...blocks].map(
+        (key) => key.split("|") as [string, string]
+      )
     }
+    return result
   }
 }
 

@@ -8,6 +8,7 @@ import {
   PanelRightCloseIcon,
   PanelRightOpenIcon,
   RotateCcwIcon,
+  RefreshCwIcon,
   SearchIcon,
   SlidersHorizontalIcon,
   UsersIcon,
@@ -29,7 +30,8 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
 import { SyncButton } from "@/components/graph/sync-button"
-export type ToggleKey = "showOutside" | "showParents" | "showOrphans"
+export type ToggleKey =
+  "showOutside" | "showParents" | "showOrphans" | "hideOrphans"
 export function ToggleBar({
   active,
   onToggle,
@@ -44,6 +46,8 @@ export function ToggleBar({
   onShare,
   panelOpen,
   onTogglePanel,
+  allIssues = false,
+  onRefresh,
 }: {
   active: ToggleKey[]
   onToggle: (keys: ToggleKey[]) => void
@@ -58,6 +62,8 @@ export function ToggleBar({
   onShare: () => void
   panelOpen: boolean
   onTogglePanel: () => void
+  allIssues?: boolean
+  onRefresh?: () => void
 }) {
   const panelLabel = panelOpen
     ? "Colapsar panel de resumen"
@@ -76,14 +82,22 @@ export function ToggleBar({
             <DropdownMenuLabel>Mostrar en el grafo</DropdownMenuLabel>
             {(
               [
-                { key: "showOutside", label: "Fuera del ciclo", shortcut: "1" },
+                ...(!allIssues
+                  ? [
+                      {
+                        key: "showOutside",
+                        label: "Fuera del ciclo",
+                        shortcut: "1",
+                      } as const,
+                    ]
+                  : []),
                 {
                   key: "showParents",
                   label: "Contexto de épicas",
                   shortcut: "2",
                 },
                 {
-                  key: "showOrphans",
+                  key: allIssues ? "hideOrphans" : "showOrphans",
                   label: "Sin dependencias",
                   shortcut: "3",
                 },
@@ -91,7 +105,11 @@ export function ToggleBar({
             ).map(({ key, label, shortcut }) => (
               <DropdownMenuCheckboxItem
                 key={key}
-                checked={active.includes(key)}
+                checked={
+                  key === "hideOrphans"
+                    ? !active.includes(key)
+                    : active.includes(key)
+                }
                 onCheckedChange={() =>
                   onToggle(
                     active.includes(key)
@@ -137,7 +155,13 @@ export function ToggleBar({
             <Kbd>K</Kbd>
           </KbdGroup>
         </Button>
-        <SyncButton compact />
+        {allIssues ? (
+          <ToolbarIcon label="Actualizar grafo" onClick={() => onRefresh?.()}>
+            <RefreshCwIcon />
+          </ToolbarIcon>
+        ) : (
+          <SyncButton compact />
+        )}
         <ToolbarIcon label="Compartir vista" onClick={onShare}>
           <LinkIcon />
         </ToolbarIcon>

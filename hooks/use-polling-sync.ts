@@ -11,10 +11,11 @@ const POLL_INTERVAL_MS = 60_000
  * IssueRelation, so this is the only way blocking-relation changes ever
  * reach us. Runs only while the tab is visible.
  */
-export function usePollingSync() {
+export function usePollingSync(enabled = true) {
   const router = useRouter()
 
   useEffect(() => {
+    if (!enabled) return
     let interval: ReturnType<typeof setInterval> | null = null
 
     async function poll() {
@@ -49,5 +50,5 @@ export function usePollingSync() {
       document.removeEventListener("visibilitychange", handleVisibility)
       stop()
     }
-  }, [router])
+  }, [router, enabled])
 }

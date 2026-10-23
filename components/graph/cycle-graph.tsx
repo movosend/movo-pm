@@ -100,18 +100,37 @@ function roundedPath(points: Point[], radius = 10) {
   return d
 }
 
-export function CycleGraph({ snapshot }: { snapshot: Snapshot }) {
+export function CycleGraph({
+  snapshot,
+  allIssues = false,
+  onRefresh,
+}: {
+  snapshot: Snapshot
+  allIssues?: boolean
+  onRefresh?: () => void
+}) {
   return (
-    <IssueUpdatesProvider>
-      <CycleGraphView snapshot={snapshot} />
+    <IssueUpdatesProvider onUpdated={allIssues ? onRefresh : undefined}>
+      <CycleGraphView
+        snapshot={snapshot}
+        allIssues={allIssues}
+        onRefresh={onRefresh}
+      />
     </IssueUpdatesProvider>
   )
 }
-function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
+function CycleGraphView({
+  snapshot,
+  allIssues,
+  onRefresh,
+}: {
+  snapshot: Snapshot
+  allIssues: boolean
+  onRefresh?: () => void
+}) {
   const canvasRef = useRef<HTMLDivElement>(null)
-  const { state: location, update: updateLocation } = useGraphLocation(
-    snapshot.cycle.id
-  )
+  const viewId = allIssues ? "all-issues" : snapshot.cycle.id
+  const { state: location, update: updateLocation } = useGraphLocation(viewId)
   const selected = location.selected
   const active = location.active
   const filters = location.filters
@@ -169,12 +188,15 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
     () => new Map(snapshot.nodes.map((n) => [n.id, n])),
     [snapshot]
   )
-  const graph = useMemo(() => buildGraph(snapshot), [snapshot])
+  const graph = useMemo(
+    () => buildGraph(snapshot, allIssues),
+    [snapshot, allIssues]
+  )
   const cycles = useMemo(() => detectCycles(graph), [graph])
   const layout = useMemo(() => {
     const selectedNode = selected ? nodesById.get(selected) : null
     if (!selectedNode || selectedNode.inCycle || showOutside)
-      return layoutGraph(snapshot, { showOutside })
+      return layoutGraph(snapshot, { showOutside, includeEpics: allIssues })
     const revealed = new Set([
       selectedNode.id,
       ...walk(selectedNode.id, graph.preds),
@@ -187,11 +209,14 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
           revealed.has(node.id) ? { ...node, inCycle: true } : node
         ),
       },
-      { showOutside: false }
+      { showOutside: false, includeEpics: allIssues }
     )
-  }, [snapshot, showOutside, selected, nodesById, graph])
+  }, [snapshot, showOutside, selected, nodesById, graph, allIssues])
+  const orphansEnabled = allIssues
+    ? !active.includes("hideOrphans")
+    : active.includes("showOrphans")
   const showOrphans =
-    active.includes("showOrphans") ||
+    orphansEnabled ||
     filtering ||
     Boolean(selected && layout.orphans.includes(selected))
   const matchingIds = useMemo(
@@ -200,13 +225,13 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
         snapshot.nodes
           .filter(
             (node) =>
-              !node.isEpic &&
+              (allIssues || !node.isEpic) &&
               (node.inCycle || showOutside) &&
               matchesFilters(node, filters, graph)
           )
           .map((node) => node.id)
       ),
-    [snapshot, showOutside, filters, graph]
+    [snapshot, showOutside, filters, graph, allIssues]
   )
 
   const chain = useMemo(() => longestChain(graph), [graph])
@@ -253,7 +278,7 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
 
   const visibleOrphanPos = Object.fromEntries(
     Object.entries(orphanPos).filter(
-      ([id]) => active.includes("showOrphans") || filtering || selected === id
+      ([id]) => orphansEnabled || filtering || selected === id
     )
   )
   const selectedNode = selected ? (nodesById.get(selected) ?? null) : null
@@ -270,7 +295,7 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
     )
   }, [snapshot, highlightedUserId])
 
-  usePollingSync()
+  usePollingSync(!allIssues)
 
   function centeredView(k: number, extraHeight = 0) {
     const height = canvasRef.current?.clientHeight ?? 0
@@ -301,7 +326,7 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
   async function share(issue: boolean) {
     try {
       const params = new URLSearchParams(window.location.search)
-      params.set("cycle", snapshot.cycle.id)
+      params.set("cycle", viewId)
       if (!issue) params.delete("issue")
       const url = new URL(window.location.href)
       url.search = params.toString()
@@ -426,12 +451,14 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
       }
       if (searchOpen || userPaletteOpen || isTypingTarget(e.target)) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === "1") {
+      if (e.key === "1" && !allIssues) {
         setActive((prev) => toggleKey(prev, "showOutside"))
       } else if (e.key === "2") {
         setActive((prev) => toggleKey(prev, "showParents"))
       } else if (e.key === "3") {
-        setActive((prev) => toggleKey(prev, "showOrphans"))
+        setActive((prev) =>
+          toggleKey(prev, allIssues ? "hideOrphans" : "showOrphans")
+        )
       } else if (e.key.toLowerCase() === "r") {
         setSelected(null)
         animateTo(centeredView(1, showOrphans ? orphanAreaHeight : 0))
@@ -486,7 +513,7 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
   }, [])
 
   const Panel =
-    selected && (!selectedNode || selectedNode.isEpic)
+    selected && (allIssues || !selectedNode || selectedNode.isEpic)
       ? RemoteIssuePanel
       : SidePanel
   const panel = (
@@ -518,13 +545,33 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
       }}
       group={group}
       onGroup={selectGroup}
+      allIssues={allIssues}
     />
   )
 
   return (
     <div ref={containerRef} className="flex h-full flex-col">
-      <CycleHeader cycle={snapshot.cycle} nodes={snapshot.nodes} />
+      {allIssues ? (
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">
+              {snapshot.cycle.team} · Todos los issues
+            </h1>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Dependencias de todos los ciclos y el backlog. Podés ocultar los
+              issues sin dependencias desde Vista.
+            </p>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {snapshot.nodes.length} issues del equipo
+          </span>
+        </header>
+      ) : (
+        <CycleHeader cycle={snapshot.cycle} nodes={snapshot.nodes} />
+      )}
       <ToggleBar
+        allIssues={allIssues}
+        onRefresh={onRefresh}
         active={active}
         onToggle={setActive}
         onReset={() => {
@@ -546,7 +593,8 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
         count={matchingIds.size}
         total={
           snapshot.nodes.filter(
-            (node) => !node.isEpic && (node.inCycle || showOutside)
+            (node) =>
+              (allIssues || !node.isEpic) && (node.inCycle || showOutside)
           ).length
         }
         onShare={() => {
@@ -565,10 +613,12 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
         members={snapshot.members ?? []}
         states={snapshot.states ?? []}
       />
-      {location.cycle && location.cycle !== snapshot.cycle.id && (
+      {location.cycle && location.cycle !== viewId && (
         <Alert>
           <AlertDescription>
-            El ciclo del enlace cambió. Estás viendo los datos del ciclo actual.
+            {allIssues
+              ? "Este enlace corresponde a otra vista. Estás viendo todos los issues."
+              : "El ciclo del enlace cambió. Estás viendo los datos del ciclo actual."}
           </AlertDescription>
         </Alert>
       )}
@@ -576,8 +626,7 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
         !selectedNode.isEpic &&
         ((!selectedNode.inCycle && !showOutside) ||
           (filtering && !matchingIds.has(selectedNode.id)) ||
-          (!active.includes("showOrphans") &&
-            Boolean(orphanPos[selectedNode.id]))) && (
+          (!showOrphans && Boolean(orphanPos[selectedNode.id]))) && (
           <Alert>
             <AlertDescription>
               Mostrando issue seleccionada fuera de los filtros.
@@ -819,7 +868,13 @@ function CycleGraphView({ snapshot }: { snapshot: Snapshot }) {
                       textAnchor="end"
                       className="fill-muted-foreground text-[10px]"
                     >
-                      {n.pts ? `${n.pts} pt` : n.inCycle ? "—" : "fuera"}
+                      {n.isEpic
+                        ? "Épica"
+                        : n.pts
+                          ? `${n.pts} pt`
+                          : n.inCycle
+                            ? "—"
+                            : "fuera"}
                     </text>
                     <text
                       x={16}

@@ -23,7 +23,13 @@ const LABELS: Record<string, string> = {
   estimate: "Puntos actualizados",
   cycleId: "Ciclo actualizado",
 }
-export function IssueUpdatesProvider({ children }: { children: ReactNode }) {
+export function IssueUpdatesProvider({
+  children,
+  onUpdated,
+}: {
+  children: ReactNode
+  onUpdated?: () => void
+}) {
   const router = useRouter()
   const [manager] = useState(() => createToastManager())
   const locks = useRef(new Set<string>())
@@ -53,6 +59,7 @@ export function IssueUpdatesProvider({ children }: { children: ReactNode }) {
       const result = await patchIssue(id, input, undo?.receipt.after)
       invalidate(id, input)
       router.refresh()
+      onUpdated?.()
       if (undo) {
         manager.add({
           title: `${id} · Cambio deshecho`,

@@ -5,7 +5,7 @@ import { scopedHandler } from "@/lib/workspaces/api"
 async function handleGET(request: Request) {
   const after = new URL(request.url).searchParams.get("after") ?? undefined
   try {
-    return NextResponse.json(await getLinearSource().getTeamIssuesPage(after))
+    return NextResponse.json(await getLinearSource().getTeamGraphPage(after))
   } catch (error) {
     return NextResponse.json(
       {

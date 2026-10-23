@@ -66,7 +66,7 @@ export function IssueSearchCommand({
           .map((node) => ({
             ...node,
             url: `https://linear.app/${cycle.workspace}/issue/${node.id}`,
-            cycleId: node.inCycle ? cycle.id : null,
+            cycleId: node.cycleId ?? null,
           }))
       : []
   const localIds = new Set(localResults.map((issue) => issue.id))

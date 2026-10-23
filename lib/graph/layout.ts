@@ -14,6 +14,7 @@ export const LAYOUT_METRICS = {
 export type LayoutOptions = {
   /** Mirrors the mockup's "Fuera del ciclo" toggle. */
   showOutside: boolean
+  includeEpics?: boolean
   metrics?: Partial<typeof LAYOUT_METRICS>
 }
 
@@ -50,7 +51,11 @@ export function layoutGraph(
 
   const visible = new Set(
     snapshot.nodes
-      .filter((n) => n.isEpic !== true && (n.inCycle || options.showOutside))
+      .filter(
+        (n) =>
+          (options.includeEpics || n.isEpic !== true) &&
+          (n.inCycle || options.showOutside)
+      )
       .map((n) => n.id)
   )
   const edges = snapshot.blocks.filter(
