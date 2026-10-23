@@ -14,7 +14,7 @@ export type Filters = {
   conditions: Condition[]
 }
 export type Visibility =
-  "showOutside" | "showParents" | "showOrphans" | "hideOrphans"
+  "showOutside" | "showParents" | "hideParents" | "showOrphans" | "hideOrphans"
 export type ViewState = {
   filters: Filters
   active: Visibility[]
@@ -97,7 +97,13 @@ export function decodeView(params: URLSearchParams): ViewState {
       ),
     },
     active: unique(params.getAll("show")).filter((v): v is Visibility =>
-      ["showOutside", "showParents", "showOrphans", "hideOrphans"].includes(v)
+      [
+        "showOutside",
+        "showParents",
+        "hideParents",
+        "showOrphans",
+        "hideOrphans",
+      ].includes(v)
     ),
     selected:
       selected && /^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(selected)

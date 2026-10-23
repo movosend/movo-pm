@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SyncButton } from "@/components/graph/sync-button"
 export type ToggleKey =
-  "showOutside" | "showParents" | "showOrphans" | "hideOrphans"
+  "showOutside" | "showParents" | "hideParents" | "showOrphans" | "hideOrphans"
 export function ToggleBar({
   active,
   onToggle,
@@ -92,8 +92,8 @@ export function ToggleBar({
                     ]
                   : []),
                 {
-                  key: "showParents",
-                  label: "Contexto de épicas",
+                  key: allIssues ? "hideParents" : "showParents",
+                  label: "Nombre del issue padre",
                   shortcut: "2",
                 },
                 {
@@ -106,7 +106,7 @@ export function ToggleBar({
               <DropdownMenuCheckboxItem
                 key={key}
                 checked={
-                  key === "hideOrphans"
+                  key === "hideOrphans" || key === "hideParents"
                     ? !active.includes(key)
                     : active.includes(key)
                 }

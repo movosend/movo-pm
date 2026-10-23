@@ -382,7 +382,7 @@ function DetailView({
         <IssueDescription description={node.description} />
       </Section>
       {node.parent && (
-        <Section label="Épica">
+        <Section label="Issue padre">
           {parent ? (
             <Row
               node={parent}

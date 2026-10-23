@@ -72,6 +72,7 @@ it("connects blockers across all team issues, including ones outside the active 
   expect(page.blocks).toEqual([["TEAM-1", "TEAM-2"]])
   expect(graph.succs["TEAM-1"]).toEqual(["TEAM-2"])
   expect(graph.preds["TEAM-2"]).toEqual(["TEAM-1"])
+  expect(graph.nodesById["TEAM-3"]).toBeUndefined()
   expect(
     layoutGraph(
       {
@@ -82,7 +83,7 @@ it("connects blockers across all team issues, including ones outside the active 
         members: page.members,
         analysis: null,
       },
-      { showOutside: false, includeEpics: true }
+      { showOutside: false }
     ).orphans
-  ).toContain("TEAM-3")
+  ).not.toContain("TEAM-3")
 })

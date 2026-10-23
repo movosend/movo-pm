@@ -182,21 +182,20 @@ function CycleGraphView({
   )
 
   const showOutside = active.includes("showOutside")
-  const showParents = active.includes("showParents")
+  const showParents = allIssues
+    ? !active.includes("hideParents")
+    : active.includes("showParents")
 
   const nodesById = useMemo(
     () => new Map(snapshot.nodes.map((n) => [n.id, n])),
     [snapshot]
   )
-  const graph = useMemo(
-    () => buildGraph(snapshot, allIssues),
-    [snapshot, allIssues]
-  )
+  const graph = useMemo(() => buildGraph(snapshot), [snapshot])
   const cycles = useMemo(() => detectCycles(graph), [graph])
   const layout = useMemo(() => {
     const selectedNode = selected ? nodesById.get(selected) : null
     if (!selectedNode || selectedNode.inCycle || showOutside)
-      return layoutGraph(snapshot, { showOutside, includeEpics: allIssues })
+      return layoutGraph(snapshot, { showOutside })
     const revealed = new Set([
       selectedNode.id,
       ...walk(selectedNode.id, graph.preds),
@@ -209,9 +208,9 @@ function CycleGraphView({
           revealed.has(node.id) ? { ...node, inCycle: true } : node
         ),
       },
-      { showOutside: false, includeEpics: allIssues }
+      { showOutside: false }
     )
-  }, [snapshot, showOutside, selected, nodesById, graph, allIssues])
+  }, [snapshot, showOutside, selected, nodesById, graph])
   const orphansEnabled = allIssues
     ? !active.includes("hideOrphans")
     : active.includes("showOrphans")
@@ -225,13 +224,13 @@ function CycleGraphView({
         snapshot.nodes
           .filter(
             (node) =>
-              (allIssues || !node.isEpic) &&
+              !node.isEpic &&
               (node.inCycle || showOutside) &&
               matchesFilters(node, filters, graph)
           )
           .map((node) => node.id)
       ),
-    [snapshot, showOutside, filters, graph, allIssues]
+    [snapshot, showOutside, filters, graph]
   )
 
   const chain = useMemo(() => longestChain(graph), [graph])
@@ -454,7 +453,9 @@ function CycleGraphView({
       if (e.key === "1" && !allIssues) {
         setActive((prev) => toggleKey(prev, "showOutside"))
       } else if (e.key === "2") {
-        setActive((prev) => toggleKey(prev, "showParents"))
+        setActive((prev) =>
+          toggleKey(prev, allIssues ? "hideParents" : "showParents")
+        )
       } else if (e.key === "3") {
         setActive((prev) =>
           toggleKey(prev, allIssues ? "hideOrphans" : "showOrphans")
@@ -558,12 +559,15 @@ function CycleGraphView({
               {snapshot.cycle.team} · Todos los issues
             </h1>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Dependencias de todos los ciclos y el backlog. Podés ocultar los
-              issues sin dependencias desde Vista.
+              Trabajo de todos los ciclos y el backlog. Las épicas no ocupan
+              nodos; el nombre del issue padre aparece sobre cada tarjeta y se
+              puede ocultar desde Vista.
             </p>
           </div>
           <span className="text-xs text-muted-foreground">
-            {snapshot.nodes.length} issues del equipo
+            {snapshot.nodes.filter((node) => !node.isEpic).length} de trabajo ·{" "}
+            {snapshot.nodes.filter((node) => node.isEpic).length} épicas de
+            contexto
           </span>
         </header>
       ) : (
@@ -593,8 +597,7 @@ function CycleGraphView({
         count={matchingIds.size}
         total={
           snapshot.nodes.filter(
-            (node) =>
-              (allIssues || !node.isEpic) && (node.inCycle || showOutside)
+            (node) => !node.isEpic && (node.inCycle || showOutside)
           ).length
         }
         onShare={() => {
@@ -868,13 +871,7 @@ function CycleGraphView({
                       textAnchor="end"
                       className="fill-muted-foreground text-[10px]"
                     >
-                      {n.isEpic
-                        ? "Épica"
-                        : n.pts
-                          ? `${n.pts} pt`
-                          : n.inCycle
-                            ? "—"
-                            : "fuera"}
+                      {n.pts ? `${n.pts} pt` : n.inCycle ? "—" : "fuera"}
                     </text>
                     <text
                       x={16}
@@ -1074,6 +1071,7 @@ function CycleGraphView({
         cycle={snapshot.cycle}
         nodes={snapshot.nodes}
         onSelectIssue={setSelected}
+        hideEpics={allIssues}
       />
       <UserHighlightCommand
         open={userPaletteOpen}

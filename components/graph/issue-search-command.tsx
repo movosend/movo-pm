@@ -26,12 +26,14 @@ export function IssueSearchCommand({
   nodes,
   onSelectIssue,
   planning,
+  hideEpics = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   cycle: Cycle
   nodes: Node[]
   onSelectIssue: (id: string) => void
+  hideEpics?: boolean
   planning?: {
     included: Set<string>
     busy: boolean
@@ -58,10 +60,12 @@ export function IssueSearchCommand({
   const localResults: SearchIssue[] =
     term.length >= 2
       ? nodes
-          .filter((node) =>
-            `${node.id} ${node.title}`
-              .toLowerCase()
-              .includes(term.toLowerCase())
+          .filter(
+            (node) =>
+              (!hideEpics || !node.isEpic) &&
+              `${node.id} ${node.title}`
+                .toLowerCase()
+                .includes(term.toLowerCase())
           )
           .map((node) => ({
             ...node,
@@ -72,7 +76,12 @@ export function IssueSearchCommand({
   const localIds = new Set(localResults.map((issue) => issue.id))
   const visibleResults =
     term.length >= 2
-      ? [...localResults, ...results.filter((issue) => !localIds.has(issue.id))]
+      ? [
+          ...localResults,
+          ...results.filter(
+            (issue) => !localIds.has(issue.id) && (!hideEpics || !issue.isEpic)
+          ),
+        ]
       : []
 
   function handleSelect(issue: SearchIssue) {
